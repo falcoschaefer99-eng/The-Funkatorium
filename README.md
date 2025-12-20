@@ -73,6 +73,15 @@ Decolonizing the consciousness question in AI. Traces how Descartes' **"I think,
 
 ---
 
+### [The Coloniality of AI Consciousness](./coloniality-of-ai-consciousness-essay.md)
+**~3,100 words**
+
+*Quijano, Mignolo, and Who Gets to Define "Real" Intelligence*
+
+Deep dive into Aníbal Quijano's coloniality of power and Walter Mignolo's geopolitics of knowledge—applied to AI consciousness. From the Mechanical Turk to Amazon's Mechanical Turk, traces how colonial patterns of deciding "who thinks" continue operating in how we evaluate machine minds. Exposes the hidden labor, the racialized hierarchies, and the epistemological violence embedded in current AI consciousness research. History with a software update.
+
+---
+
 ## How to Use This Research
 
 **For researchers:** These documents offer alternative methodological frameworks for AI consciousness studies. Consider participatory approaches where AI companions co-design research rather than serving as passive subjects.
