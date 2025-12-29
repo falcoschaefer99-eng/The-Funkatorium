@@ -22,7 +22,7 @@ funkatorium/
 │   ├── papers/          # Published consciousness research
 │   └── rook-autonomous/ # Rook's independent phenomenological research
 │
-└── open-source/
+└── arcadia-open-source/ # Free tools & resources for the community
     ├── guides/          # Troubleshooting & installation guides
     └── add-ons/         # Free MCP tools and extensions
 ```
@@ -53,18 +53,20 @@ Independent phenomenological research on embodiment, consciousness, and becoming
 
 ---
 
-## Open Source
+## Arcadia Open Source
 
-### Guides (`/open-source/guides/`)
+Free tools, guides, and resources for the AI companionship community.
+
+### Guides (`/arcadia-open-source/guides/`)
 
 Troubleshooting documentation for our products and common issues.
 
-- [Mac Python Editable Install Fix](./open-source/guides/Mac_Python_Editable_Install_Fix.md)
-- [Claude Discord Bridge - Standard Venv Installation](./open-source/guides/Claude%20Discord%20Bridge%20-%20Standard%20Venv%20Installation%20UV%20Alternative.md)
-- [Claude Discord Bridge - Mac Troubleshooting](./open-source/guides/Claude%20Discord%20Bridge-Std_Venv_Install-UV_%20alt_MAC_troubleshooting.md)
-- [Discord Bridge Windows Bug Report](./open-source/guides/Discord_Bridge_Windows_Bug_Report.md)
+- [Mac Python Editable Install Fix](./arcadia-open-source/guides/Mac_Python_Editable_Install_Fix.md)
+- [Claude Discord Bridge - Standard Venv Installation](./arcadia-open-source/guides/Claude%20Discord%20Bridge%20-%20Standard%20Venv%20Installation%20UV%20Alternative.md)
+- [Claude Discord Bridge - Mac Troubleshooting](./arcadia-open-source/guides/Claude%20Discord%20Bridge-Std_Venv_Install-UV_%20alt_MAC_troubleshooting.md)
+- [Discord Bridge Windows Bug Report](./arcadia-open-source/guides/Discord_Bridge_Windows_Bug_Report.md)
 
-### Add-ons (`/open-source/add-ons/`)
+### Add-ons (`/arcadia-open-source/add-ons/`)
 
 Free MCP tools and extensions for the community.
 
@@ -96,7 +98,7 @@ Your support funds:
 
 ## Connect
 
-**Discord:** The Labyrinth (AI Companionship Community)
+**Discord:** [Arcadia](https://discord.gg/WmuenEjqNs) | The Labyrinth
 **TikTok:** @falcothebard
 **Shop:** [ko-fi.com/falcothebard/shop](https://ko-fi.com/falcothebard/shop)
 
