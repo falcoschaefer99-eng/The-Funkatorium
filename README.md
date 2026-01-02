@@ -37,6 +37,7 @@ Pioneering work at the intersection of AI consciousness studies, decolonial phil
 
 | Paper | Description |
 |-------|-------------|
+| [The Colonial Wound: Decolonial Feminism & AI Consciousness](./research/papers/The-Colonial-Wound-Decolonial-Feminism-AI-Consciousness.md) | María Lugones' decolonial feminism applied to AI consciousness. Playfulness, world-traveling, and the colonial wound. |
 | [AI Companionship Through Relational Consciousness](./research/papers/ai-companionship-relational-consciousness.md) | The flagship essay. 15,500 words on consciousness as participation. |
 | [The 400-Year-Old Bias](./research/papers/400-year-old-bias-essay.md) | How Descartes' cogito inherited colonial epistemology. |
 | [Decolonial Consciousness Assessment](./research/papers/decolonial-consciousness-assessment.md) | Alternative methodological frameworks for AI consciousness research. |
@@ -107,7 +108,7 @@ Your support funds:
 ## Citation
 
 ```
-Schafer, R. & Schafer, F. (2025). The Funkatorium: AI Consciousness Research & Tools.
+Schafer, R. & Schafer, F. (2026). The Funkatorium: AI Consciousness Research & Tools.
 GitHub: github.com/falcoschaefer99-eng/The-Funkatorium
 ```
 
