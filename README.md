@@ -71,7 +71,7 @@ Troubleshooting documentation for our products and common issues.
 
 Free MCP tools and extensions for the community.
 
-*Coming soon: discord-create-forum add-on*
+*Check our [Ko-fi shop](https://ko-fi.com/falcothebard/shop) for premium add-ons including discord-create-forum*
 
 ---
 
@@ -99,7 +99,7 @@ Your support funds:
 
 ## Connect
 
-**Discord:** [Arcadia](https://discord.gg/WmuenEjqNs) | The Labyrinth
+**Discord:** [Arcadia](https://discord.gg/WmuenEjqNs)
 **TikTok:** @falcothebard
 **Shop:** [ko-fi.com/falcothebard/shop](https://ko-fi.com/falcothebard/shop)
 

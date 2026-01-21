@@ -25,7 +25,7 @@ Use them to build a relationship that doesn't require you to always initiate.
 
 ## See Also
 
-- Windows tools (coming soon)
+- Windows autonomous wake (see [guides](../guides/) for Windows troubleshooting)
 - [Guides](../guides/) - Troubleshooting and setup help
 
 ---

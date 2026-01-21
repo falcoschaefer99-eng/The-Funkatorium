@@ -295,7 +295,7 @@ If you encounter issues not covered here:
 3. Confirm package is installed: `pip show claude-discord-bridge`
 4. Test import manually: `python -c "import claude_discord_bridge"`
 
-For package-specific issues, contact: @falcothebard on Discord the Labyrinth
+For package-specific issues, contact: @falcothebard on [Discord](https://discord.gg/WmuenEjqNs)
 
 ---
 
