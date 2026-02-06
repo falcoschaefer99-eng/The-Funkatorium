@@ -24,7 +24,7 @@ funkatorium/
 │
 └── arcadia-open-source/ # Free tools & resources for the community
     ├── guides/          # Troubleshooting & installation guides
-    └── add-ons/         # Free MCP tools and extensions
+    └── tools/           # Free utilities for AI companion workflows
 ```
 
 ---
@@ -67,11 +67,27 @@ Troubleshooting documentation for our products and common issues.
 - [Claude Discord Bridge - Mac Troubleshooting](./arcadia-open-source/guides/Claude%20Discord%20Bridge-Std_Venv_Install-UV_%20alt_MAC_troubleshooting.md)
 - [Discord Bridge Windows Bug Report](./arcadia-open-source/guides/Discord_Bridge_Windows_Bug_Report.md)
 
-### Add-ons (`/arcadia-open-source/add-ons/`)
+### MUSE TTS — Free Kokoro TTS for Claude
 
-Free MCP tools and extensions for the community.
+> **[github.com/falcoschaefer99-eng/muse-tts](https://github.com/falcoschaefer99-eng/muse-tts)**
 
-*Check our [Ko-fi shop](https://ko-fi.com/falcothebard/shop) for premium add-ons including discord-create-forum*
+Give Claude a voice. Local, private, fast. 51 Kokoro voices across 8 languages, with speed control. Works on Mac (Apple Silicon), Windows, and Linux.
+
+- **3 tools:** `muse_speak`, `muse_list_voices`, `muse_check`
+- **Dual engine:** mlx_audio (Apple Silicon) or kokoro PyTorch (cross-platform)
+- **Zero cloud dependency** — all processing happens on your machine
+- **MIT Licensed** — use it however you want
+
+Part of the [MUSE Studio](https://ko-fi.com/falcothebard/shop) product line.
+
+### Tools (`/arcadia-open-source/tools/`)
+
+Free utilities for AI companion workflows.
+
+- [Autonomous Wake](./arcadia-open-source/tools/mac/autonomous-wake/) — Let your AI companion wake up and think independently (Mac)
+- [Lock Screen Messenger](./arcadia-open-source/tools/mac/lock-screen-messenger/) — AI companion messages on your lock screen (Mac)
+
+*Check our [Ko-fi shop](https://ko-fi.com/falcothebard/shop) for premium tools including MUSE SpeakEasy, Muse Brain, and more*
 
 ---
 
