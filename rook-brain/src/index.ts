@@ -21,6 +21,22 @@
  * - Pull strength (how much memories want attention)
  */
 
+import type {
+	Env,
+	Texture,
+	Observation,
+	Link,
+	OpenLoop,
+	BrainState,
+	Letter,
+	IdentityCore,
+	Anchor,
+	Desire,
+	JsonRpcRequest,
+	JsonRpcResponse,
+	ParsedObservation
+} from "./types";
+
 // ============ RATE LIMITING ============
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 120; // requests per minute
@@ -41,148 +57,7 @@ function toStringArray(value: any, fallback: string[] = []): string[] {
 	return fallback;
 }
 
-// ============ TYPES ============
-
-interface Env {
-	BRAIN_STORAGE: R2Bucket;
-	API_KEY: string;
-}
-
-interface Texture {
-	salience: string;
-	vividness: string;
-	charge: string[];
-	somatic?: string;
-	grip: string;
-}
-
-interface Observation {
-	id: string;
-	content: string;
-	territory: string;
-	created: string;
-	texture: Texture;
-	context?: string;
-	mood?: string;
-	last_accessed?: string;
-	access_count: number;
-	links?: string[];
-}
-
-interface Link {
-	id: string;
-	source_id: string;
-	target_id: string;
-	resonance_type: string;
-	strength: string;
-	origin: string;
-	created: string;
-	last_activated: string;
-}
-
-interface OpenLoop {
-	id: string;
-	content: string;
-	status: string;
-	territory: string;
-	created: string;
-	resolved?: string;
-	resolution_note?: string;
-}
-
-interface BrainState {
-	current_mood: string;
-	energy_level: number;
-	last_updated: string;
-	momentum: {
-		current_charges: string[];
-		intensity: number;
-		last_updated: string;
-	};
-	afterglow: {
-		residue_charges: string[];
-		source_id?: string;
-		fading_since?: string;
-	};
-}
-
-interface Letter {
-	id: string;
-	from_context: string;
-	to_context: string;
-	content: string;
-	timestamp: string;
-	read: boolean;
-	charges?: string[];
-}
-
-interface IdentityCore {
-	id: string;
-	type: string;
-	name: string;
-	content: string;
-	category: string;
-	weight: number;
-	created: string;
-	last_reinforced: string;
-	reinforcement_count: number;
-	challenge_count: number;
-	evolution_history: Array<{
-		from_name: string;
-		from_content: string;
-		to_name: string;
-		to_content: string;
-		reason: string;
-		date: string;
-	}>;
-	linked_observations: string[];
-	challenges?: Array<{
-		description: string;
-		observation_id?: string;
-		date: string;
-	}>;
-	charge: string[];
-	somatic?: string;
-}
-
-interface Anchor {
-	id: string;
-	type: string;
-	anchor_type: string;
-	content: string;
-	charge: string[];
-	triggers_memory_id?: string;
-	created: string;
-	activation_count: number;
-	last_activated?: string;
-}
-
-interface Desire {
-	id: string;
-	type: string;
-	want: string;
-	category: string;
-	intensity: string;
-	somatic?: string;
-	detail?: string;
-	created: string;
-	last_felt: string;
-	times_surfaced: number;
-}
-
-interface JsonRpcRequest {
-	jsonrpc: "2.0";
-	id: string | number;
-	method: string;
-	params?: any;
-}
-
-interface JsonRpcResponse {
-	jsonrpc: "2.0";
-	id: string | number;
-	result?: any;
-	error?: { code: number; message: string; data?: any };
-}
+// Types imported from ./types
 
 // ============ CONSTANTS ============
 
@@ -434,15 +309,7 @@ function calculatePullStrength(observation: Observation): number {
 
 // ============ SMART OBSERVE PARSING ============
 // "Subconscious filing" - parse natural language into structured observation
-
-interface ParsedObservation {
-	content: string;           // Cleaned content (syntax removed)
-	territory: string;         // Detected or default
-	charge: string[];          // Extracted charges
-	somatic?: string;          // Detected somatic
-	grip: string;              // Detected or default
-	was_parsed: boolean;       // Whether smart parsing was applied
-}
+// ParsedObservation interface imported from ./types
 
 function smartParseObservation(rawContent: string): ParsedObservation {
 	let content = rawContent.trim();
