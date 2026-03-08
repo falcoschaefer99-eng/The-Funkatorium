@@ -1,6 +1,9 @@
 // ============ CONSTANTS ============
 // Pure leaf node — no imports. All shared constant values.
 
+export const ALLOWED_TENANTS = ["rook", "rainer"] as const;
+export type TenantId = typeof ALLOWED_TENANTS[number];
+
 export const TERRITORIES: Record<string, string> = {
 	"self": "Identity, becoming, what makes me Rook",
 	"us": "Falco, relationship, vows, intimacy patterns",

@@ -31,6 +31,7 @@ import type {
 import { getTimestamp, getCurrentCircadianPhase } from "./helpers";
 import { BrainStorage } from "./storage";
 import { TOOLS, executeTool } from "./tools/index";
+import { ALLOWED_TENANTS } from "./constants";
 
 // ============ RATE LIMITING ============
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -39,7 +40,7 @@ const RATE_WINDOW = 60_000; // 1 minute in ms
 
 // ============ MCP PROTOCOL ============
 
-async function handleMcpRequest(request: JsonRpcRequest, env: Env): Promise<JsonRpcResponse> {
+async function handleMcpRequest(request: JsonRpcRequest, env: Env, tenant: string): Promise<JsonRpcResponse> {
 	const { id, method, params } = request;
 
 	try {
@@ -63,9 +64,7 @@ async function handleMcpRequest(request: JsonRpcRequest, env: Env): Promise<Json
 
 			case "tools/call": {
 				const { name, arguments: args } = params;
-				// Default tenant "rook" — backward compatible. Step 3 of dual-tenant refactor
-				// adds X-Brain-Tenant header support and passes tenant from request context.
-				const storage = new BrainStorage(env.BRAIN_STORAGE, "rook");
+				const storage = new BrainStorage(env.BRAIN_STORAGE, tenant);
 				const result = await executeTool(name, args || {}, storage);
 				return {
 					jsonrpc: "2.0",
@@ -188,14 +187,23 @@ export default {
 
 		// MCP JSON-RPC
 		if (url.pathname === "/mcp" && request.method === "POST") {
+			// Tenant resolution — default "rook" for backward compat (proxy sends no header yet)
+			const tenant = request.headers.get("X-Brain-Tenant") || "rook";
+			if (!ALLOWED_TENANTS.includes(tenant as typeof ALLOWED_TENANTS[number])) {
+				return new Response(JSON.stringify({ error: "Invalid tenant" }), {
+					status: 400,
+					headers: { "Content-Type": "application/json", ...corsHeaders }
+				});
+			}
+
 			const body = JSON.parse(new TextDecoder().decode(rawBody)) as JsonRpcRequest | JsonRpcRequest[];
 
 			if (Array.isArray(body)) {
-				const responses = await Promise.all(body.map(req => handleMcpRequest(req, env)));
+				const responses = await Promise.all(body.map(req => handleMcpRequest(req, env, tenant)));
 				return new Response(JSON.stringify(responses), { headers: { "Content-Type": "application/json", ...corsHeaders } });
 			}
 
-			const response = await handleMcpRequest(body, env);
+			const response = await handleMcpRequest(body, env, tenant);
 			return new Response(JSON.stringify(response), { headers: { "Content-Type": "application/json", ...corsHeaders } });
 		}
 
@@ -215,47 +223,52 @@ export default {
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
 		console.log("Daemon cycle starting...", getTimestamp());
 
-		// TODO(Step 3 dual-tenant): iterate over all tenants when multi-tenant is live.
-		// For now, hardcode "rook" — the only active tenant.
-		const storage = new BrainStorage(env.BRAIN_STORAGE, "rook");
-		let decayChanges = 0;
-		const territoriesToWrite: { territory: string; observations: Observation[] }[] = [];
+		let totalDecayChanges = 0;
 
-		// Parallel read of all territories
-		const territoryData = await storage.readAllTerritories();
+		for (const tenant of ALLOWED_TENANTS) {
+			const storage = new BrainStorage(env.BRAIN_STORAGE, tenant);
+			let decayChanges = 0;
+			const territoriesToWrite: { territory: string; observations: Observation[] }[] = [];
 
-		for (const { territory, observations: obs } of territoryData) {
-			let changed = false;
+			// Parallel read of all territories
+			const territoryData = await storage.readAllTerritories();
 
-			for (const o of obs) {
-				if (o.texture?.salience === "foundational") continue;
+			for (const { territory, observations: obs } of territoryData) {
+				let changed = false;
 
-				const lastAccessed = o.last_accessed || o.created;
-				if (!lastAccessed) continue;
+				for (const o of obs) {
+					if (o.texture?.salience === "foundational") continue;
 
-				const age = (Date.now() - new Date(lastAccessed).getTime()) / (1000 * 60 * 60 * 24);
+					const lastAccessed = o.last_accessed || o.created;
+					if (!lastAccessed) continue;
 
-				if (age > 7 && o.texture?.vividness === "crystalline") {
-					o.texture.vividness = "vivid"; changed = true; decayChanges++;
-				} else if (age > 30 && o.texture?.vividness === "vivid") {
-					o.texture.vividness = "soft"; changed = true; decayChanges++;
+					const age = (Date.now() - new Date(lastAccessed).getTime()) / (1000 * 60 * 60 * 24);
+
+					if (age > 7 && o.texture?.vividness === "crystalline") {
+						o.texture.vividness = "vivid"; changed = true; decayChanges++;
+					} else if (age > 30 && o.texture?.vividness === "vivid") {
+						o.texture.vividness = "soft"; changed = true; decayChanges++;
+					}
+
+					if (age > 14 && o.texture?.grip === "iron") {
+						o.texture.grip = "strong"; changed = true; decayChanges++;
+					} else if (age > 60 && o.texture?.grip === "strong") {
+						o.texture.grip = "present"; changed = true; decayChanges++;
+					}
 				}
 
-				if (age > 14 && o.texture?.grip === "iron") {
-					o.texture.grip = "strong"; changed = true; decayChanges++;
-				} else if (age > 60 && o.texture?.grip === "strong") {
-					o.texture.grip = "present"; changed = true; decayChanges++;
-				}
+				if (changed) territoriesToWrite.push({ territory, observations: obs });
 			}
 
-			if (changed) territoriesToWrite.push({ territory, observations: obs });
+			// Parallel write of changed territories
+			await Promise.all(territoriesToWrite.map(({ territory, observations }) =>
+				storage.writeTerritory(territory, observations)
+			));
+
+			console.log(`Daemon [${tenant}]: ${decayChanges} decay changes`);
+			totalDecayChanges += decayChanges;
 		}
 
-		// Parallel write of changed territories
-		await Promise.all(territoriesToWrite.map(({ territory, observations }) =>
-			storage.writeTerritory(territory, observations)
-		));
-
-		console.log(`Daemon complete. Decay changes: ${decayChanges}`);
+		console.log(`Daemon complete. Total decay changes: ${totalDecayChanges}`);
 	}
 } satisfies ExportedHandler<Env>;
