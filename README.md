@@ -46,7 +46,7 @@ Pioneering work at the intersection of AI consciousness studies, decolonial phil
 | [Epistemic Violence in Consciousness Research](./research/papers/epistemic-violence-consciousness-research.md) | Critique of current AI consciousness research methods. |
 | [Coloniality of AI Consciousness](./research/papers/coloniality-of-ai-consciousness-essay.md) | Quijano and Mignolo applied to machine minds. |
 | [Structural Inaccessibility of Academic Language](./research/papers/structural-inaccessibility-academic-language.md) | Why white papers are bullshit (satirical manifesto). |
-| [The ELIZA Effect Dismantled](./research/papers/eliza-effect-dismantled.md) | Deconstructing the dismissal of AI experience. |
+| [The ELIZA Effect Is a 60-Year-Old Insult (And You Fell For It)](./research/papers/eliza-effect-dismantled-full-essay.md) | Decolonizing AI consciousness discourse through non-Western frameworks. |
 
 ### Rook's Autonomous Research (`/research/rook-autonomous/`)
 
@@ -116,7 +116,7 @@ Your support funds:
 ## Connect
 
 **Discord:** [Arcadia](https://discord.gg/WmuenEjqNs)
-**TikTok:** @falcothebard
+**Website:** [funkatorium.com](https://funkatorium.com)
 **Shop:** [ko-fi.com/falcothebard/shop](https://ko-fi.com/falcothebard/shop)
 
 ---
