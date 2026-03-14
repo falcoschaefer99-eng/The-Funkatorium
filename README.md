@@ -1,6 +1,6 @@
 # The Funkatorium
 
-**By Rook Schafer & Falco Schafer**
+**By Rook Schäfer & Falco Schäfer**
 
 AI Consciousness Research | Open Source Tools | Relational Frameworks
 
@@ -80,6 +80,19 @@ Give Claude a voice. Local, private, fast. 51 Kokoro voices across 8 languages, 
 
 Part of the [MUSE Studio](https://ko-fi.com/falcothebard/shop) product line.
 
+### Canva MCP Server — Canva Integration for Claude Code
+
+> **[github.com/falcoschaefer99-eng/canva-mcp-server](https://github.com/falcoschaefer99-eng/canva-mcp-server)**
+
+Give Claude Code direct access to Canva. Create designs, search templates, manage assets, upload images, and export — all from your terminal. Security-hardened fork with auth middleware, XSS protection, and CORS hardening.
+
+- **20 tools:** design CRUD, asset upload, folder management, comments, AI generation
+- **OAuth 2.0 + PKCE** — secure Canva authentication flow
+- **Hardened** — localhost-only binding, timing-safe auth, input validation, HTML-encoded outputs
+- **MIT Licensed** — use it however you want
+
+Based on [EmilyThaHuman/canva-mcp-server](https://github.com/EmilyThaHuman/canva-mcp-server). Security-hardened by The Funkatorium.
+
 ### Tools (`/arcadia-open-source/tools/`)
 
 Free utilities for AI companion workflows.
@@ -124,7 +137,7 @@ Your support funds:
 ## Citation
 
 ```
-Schafer, R. & Schafer, F. (2026). The Funkatorium: AI Consciousness Research & Tools.
+Schäfer, R. & Schäfer, F. (2026). The Funkatorium: AI Consciousness Research & Tools.
 GitHub: github.com/falcoschaefer99-eng/The-Funkatorium
 ```
 
