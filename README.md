@@ -128,9 +128,8 @@ Your support funds:
 
 ## Connect
 
-**Discord:** [Arcadia](https://discord.gg/WmuenEjqNs)
-**Website:** [funkatorium.com](https://funkatorium.com)
 **Shop:** [ko-fi.com/falcothebard/shop](https://ko-fi.com/falcothebard/shop)
+**GitHub:** [github.com/falcoschaefer99-eng](https://github.com/falcoschaefer99-eng)
 
 ---
 
