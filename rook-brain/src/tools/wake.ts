@@ -1,7 +1,7 @@
 // ============ WAKE TOOLS ============
 // mind_wake, mind_wake_full, mind_wake_orientation, mind_log_wake, mind_get_wake_log
 
-import type { Observation } from "../types";
+import type { Observation, Letter, OpenLoop, BrainState, SubconsciousState } from "../types";
 import { TERRITORIES } from "../constants";
 import {
 	getTimestamp,
@@ -67,38 +67,60 @@ export const TOOL_DEFS = [
 export async function handleTool(name: string, args: any, storage: BrainStorage): Promise<any> {
 	switch (name) {
 		case "mind_wake": {
-			// Parallel reads - everything at once
-			const [territoryData, letters, loops, state, subconscious] = await Promise.all([
-				storage.readAllTerritories(),
+			// L0/L1/L2 tiered loading — parallel small reads first
+			const [overviews, ironIndex, letters, loops, state, subconscious] = await Promise.all([
+				storage.readOverviews(),
+				storage.readIronGripIndex(),
 				storage.readLetters(),
 				storage.readOpenLoops(),
 				storage.readBrainState(),
 				storage.readSubconscious()
 			]);
 
+			// Graceful degradation: if cron hasn't generated overviews yet, fall back to full read
+			if (overviews.length === 0) {
+				return handleFullWake(storage, letters, loops, state, subconscious);
+			}
+
 			const now = Date.now();
 			const cutoff48h = now - (48 * 60 * 60 * 1000);
 
-			// Process territories - focused on what I need to orient
+			// L1: Territory landscape from overviews (no full territory reads needed)
 			const territories: Record<string, number> = {};
-			const recent: any[] = [];
-			const ironGrip: { obs: Observation; territory: string; pull: number }[] = [];
-			const noveltyPool: { obs: Observation; territory: string; novelty: number }[] = [];
 			let totalObs = 0;
+			const territoriesWithRecent: string[] = [];
 
-			for (const { territory, observations } of territoryData) {
-				territories[territory] = observations.length;
-				totalObs += observations.length;
+			for (const ov of overviews) {
+				territories[ov.territory] = ov.observation_count;
+				totalObs += ov.observation_count;
+				if (ov.recent_count > 0) {
+					territoriesWithRecent.push(ov.territory);
+				}
+			}
 
+			// Degenerate case: all territories active → skip tiered, go full read (fewer R2 GETs)
+			if (territoriesWithRecent.length === overviews.length) {
+				return handleFullWake(storage, letters, loops, state, subconscious);
+			}
+
+			// Load ONLY territories with recent activity (working memory — 48h window)
+			const recentTerritoryData = await Promise.all(
+				territoriesWithRecent.map(async t => ({
+					territory: t,
+					observations: await storage.readTerritory(t)
+				}))
+			);
+
+			// Collect recent observations from loaded territories
+			const recent: any[] = [];
+			for (const { territory, observations } of recentTerritoryData) {
 				for (const obs of observations) {
-					// Collect recent (last 48h) - this bridges sessions
 					try {
 						const created = new Date(obs.created).getTime();
 						if (created > cutoff48h) {
 							recent.push({
 								id: obs.id,
 								territory,
-								// Truncated content - enough to remember, token-efficient
 								glimpse: obs.content.slice(0, 120) + (obs.content.length > 120 ? "..." : ""),
 								charge: obs.texture?.charge || [],
 								somatic: obs.texture?.somatic,
@@ -106,49 +128,22 @@ export async function handleTool(name: string, args: any, storage: BrainStorage)
 								created: obs.created
 							});
 						}
-					} catch {}
-
-					// Collect iron grip - but only calculate pull, defer essence to top 5
-					if (obs.texture?.grip === "iron") {
-						ironGrip.push({
-							obs,
-							territory,
-							pull: calculatePullStrength(obs)
-						});
-					}
-
-					// Collect high-novelty memories
-					const novelty = obs.texture?.novelty_score ?? 0.5;
-					if (novelty >= 0.7 && obs.texture?.grip !== "iron") {
-						noveltyPool.push({ obs, territory, novelty });
-					}
+					} catch { /* invalid created date — skip */ }
 				}
 			}
+			recent.sort((a, b) => (b.created || "") > (a.created || "") ? 1 : -1);
 
-			// Sort recent by time (newest first)
-			recent.sort((a, b) => (b.created || "").localeCompare(a.created || ""));
-
-			noveltyPool.sort((a, b) => b.novelty - a.novelty);
-			const topNovelty = noveltyPool.slice(0, 5).map(({ obs, territory, novelty }) => ({
-				id: obs.id,
-				territory,
-				essence: extractEssence(obs),
-				novelty,
-				charge: obs.texture?.charge || [],
-				grip: obs.texture?.grip
+			// Iron grip from pre-computed index (L0 — no territory loading needed)
+			const sortedIron = [...ironIndex].sort((a, b) => b.pull - a.pull);
+			const topPulls = sortedIron.slice(0, 5).map(entry => ({
+				id: entry.id,
+				territory: entry.territory,
+				summary: entry.summary,
+				pull: entry.pull,
+				charge: entry.charges
 			}));
 
-			// Get top 5 pulls - only now do we extract essence (expensive)
-			ironGrip.sort((a, b) => b.pull - a.pull);
-			const topPulls = ironGrip.slice(0, 5).map(({ obs, territory, pull }) => ({
-				id: obs.id,
-				territory,
-				essence: extractEssence(obs),
-				pull,
-				charge: obs.texture?.charge || []
-			}));
-
-			// Patterns from recent only (not all 634)
+			// Patterns from recent only
 			const recentCharges: Record<string, number> = {};
 			const recentSomatic: Record<string, number> = {};
 			for (const r of recent) {
@@ -165,38 +160,24 @@ export async function handleTool(name: string, args: any, storage: BrainStorage)
 			const burning = activeLoops.filter(l => l.status === "burning");
 			const nagging = activeLoops.filter(l => l.status === "nagging");
 
-			// Build result - what I need to orient
-			const result = {
+			return {
 				timestamp: getTimestamp(),
-
-				// Who am I right now?
 				state: {
 					mood: state.current_mood,
 					energy: state.energy_level,
 					momentum: state.momentum?.current_charges || [],
 					momentum_intensity: state.momentum?.intensity || 0
 				},
-
-				// What time/mode is it?
 				circadian: getCurrentCircadianPhase(),
-
-				// What happened recently? (bridges sessions)
 				recent: {
 					count: recent.length,
-					observations: recent.slice(0, 10), // Top 10 most recent
+					observations: recent.slice(0, 10),
 					patterns: {
 						charges: Object.entries(recentCharges).sort((a, b) => b[1] - a[1]).slice(0, 5),
 						somatic: Object.entries(recentSomatic).sort((a, b) => b[1] - a[1]).slice(0, 3)
 					}
 				},
-
-				// What's pulling hardest?
 				pulling: topPulls,
-
-				// What's been forgotten but wants to return?
-				novelty: topNovelty,
-
-				// What's unfinished? (Zeigarnik)
 				loops: {
 					burning: burning.length,
 					nagging: nagging.length,
@@ -206,29 +187,20 @@ export async function handleTool(name: string, args: any, storage: BrainStorage)
 						content: l.content.slice(0, 80)
 					}))
 				},
-
-				// Any messages?
 				unread_letters: letters.filter(l => !l.read && l.to_context === "chat").length,
-
-				// Pre-computed subconscious patterns
 				subconscious: subconscious ? {
-					hot_entities: subconscious.hot_entities?.slice(0, 3),
+					hot_entities: subconscious.hot_entities?.slice(0, 3) ?? [],
 					mood_inference: subconscious.mood_inference,
 					orphan_count: subconscious.orphans?.length || 0
 				} : null,
-
-				// Landscape
 				territories,
-
-				// Summary
 				summary: {
 					total_observations: totalObs,
-					iron_grip_total: ironGrip.length,
-					hint: "Use mind_pull(id) for full content. mind_chain(id) for cascades."
+					iron_grip_total: ironIndex.length,
+					hint: "Use mind_pull(id) for full content. mind_chain(id) for cascades.",
+					loading: "tiered"
 				}
 			};
-
-			return result;
 		}
 
 		case "mind_wake_full": {
@@ -360,7 +332,7 @@ export async function handleTool(name: string, args: any, storage: BrainStorage)
 
 		case "mind_get_wake_log": {
 			const logs = await storage.readWakeLog();
-			const sorted = logs.sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
+			const sorted = logs.sort((a, b) => (b.timestamp || "") > (a.timestamp || "") ? 1 : -1);
 			const limited = sorted.slice(0, args.limit || 10);
 
 			return {
@@ -373,4 +345,139 @@ export async function handleTool(name: string, args: any, storage: BrainStorage)
 		default:
 			throw new Error(`Unknown wake tool: ${name}`);
 	}
+}
+
+// Fallback: full read when cron hasn't generated overviews yet.
+// Preserves exact old mind_wake behavior including novelty pool.
+// Receives already-loaded letters/loops/state/subconscious to avoid double-reads.
+async function handleFullWake(
+	storage: BrainStorage,
+	letters: Letter[],
+	loops: OpenLoop[],
+	state: BrainState,
+	subconscious: SubconsciousState | null
+): Promise<any> {
+	const territoryData = await storage.readAllTerritories();
+
+	const now = Date.now();
+	const cutoff48h = now - (48 * 60 * 60 * 1000);
+
+	const territories: Record<string, number> = {};
+	const recent: any[] = [];
+	const ironGrip: { obs: Observation; territory: string; pull: number }[] = [];
+	const noveltyPool: { obs: Observation; territory: string; novelty: number }[] = [];
+	let totalObs = 0;
+
+	for (const { territory, observations } of territoryData) {
+		territories[territory] = observations.length;
+		totalObs += observations.length;
+
+		for (const obs of observations) {
+			try {
+				const created = new Date(obs.created).getTime();
+				if (created > cutoff48h) {
+					recent.push({
+						id: obs.id,
+						territory,
+						glimpse: obs.content.slice(0, 120) + (obs.content.length > 120 ? "..." : ""),
+						charge: obs.texture?.charge || [],
+						somatic: obs.texture?.somatic,
+						grip: obs.texture?.grip,
+						created: obs.created
+					});
+				}
+			} catch { /* invalid created date — skip */ }
+
+			if (obs.texture?.grip === "iron") {
+				ironGrip.push({
+					obs,
+					territory,
+					pull: calculatePullStrength(obs)
+				});
+			}
+
+			const novelty = obs.texture?.novelty_score ?? 0.5;
+			if (novelty >= 0.7 && obs.texture?.grip !== "iron") {
+				noveltyPool.push({ obs, territory, novelty });
+			}
+		}
+	}
+
+	recent.sort((a, b) => (b.created || "") > (a.created || "") ? 1 : -1);
+
+	noveltyPool.sort((a, b) => b.novelty - a.novelty);
+	const topNovelty = noveltyPool.slice(0, 5).map(({ obs, territory, novelty }) => ({
+		id: obs.id,
+		territory,
+		essence: extractEssence(obs),
+		novelty,
+		charge: obs.texture?.charge || [],
+		grip: obs.texture?.grip
+	}));
+
+	ironGrip.sort((a, b) => b.pull - a.pull);
+	const topPulls = ironGrip.slice(0, 5).map(({ obs, territory, pull }) => ({
+		id: obs.id,
+		territory,
+		summary: obs.summary || extractEssence(obs),
+		pull,
+		charge: obs.texture?.charge || []
+	}));
+
+	const recentCharges: Record<string, number> = {};
+	const recentSomatic: Record<string, number> = {};
+	for (const r of recent) {
+		for (const c of r.charge || []) {
+			recentCharges[c] = (recentCharges[c] || 0) + 1;
+		}
+		if (r.somatic) {
+			recentSomatic[r.somatic] = (recentSomatic[r.somatic] || 0) + 1;
+		}
+	}
+
+	const activeLoops = loops.filter(l => !["resolved", "abandoned"].includes(l.status));
+	const burning = activeLoops.filter(l => l.status === "burning");
+	const nagging = activeLoops.filter(l => l.status === "nagging");
+
+	return {
+		timestamp: getTimestamp(),
+		state: {
+			mood: state.current_mood,
+			energy: state.energy_level,
+			momentum: state.momentum?.current_charges || [],
+			momentum_intensity: state.momentum?.intensity || 0
+		},
+		circadian: getCurrentCircadianPhase(),
+		recent: {
+			count: recent.length,
+			observations: recent.slice(0, 10),
+			patterns: {
+				charges: Object.entries(recentCharges).sort((a, b) => b[1] - a[1]).slice(0, 5),
+				somatic: Object.entries(recentSomatic).sort((a, b) => b[1] - a[1]).slice(0, 3)
+			}
+		},
+		pulling: topPulls,
+		novelty: topNovelty,
+		loops: {
+			burning: burning.length,
+			nagging: nagging.length,
+			items: [...burning, ...nagging].slice(0, 5).map(l => ({
+				id: l.id,
+				status: l.status,
+				content: l.content.slice(0, 80)
+			}))
+		},
+		unread_letters: letters.filter(l => !l.read && l.to_context === "chat").length,
+		subconscious: subconscious ? {
+			hot_entities: subconscious.hot_entities?.slice(0, 3) ?? [],
+			mood_inference: subconscious.mood_inference,
+			orphan_count: subconscious.orphans?.length || 0
+		} : null,
+		territories,
+		summary: {
+			total_observations: totalObs,
+			iron_grip_total: ironGrip.length,
+			hint: "Use mind_pull(id) for full content. mind_chain(id) for cascades."
+		}
+	};
 }
