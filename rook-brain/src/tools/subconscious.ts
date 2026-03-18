@@ -37,12 +37,15 @@ export async function handleTool(name: string, args: any, storage: BrainStorage)
 // ============ DAEMON PROCESSING ============
 // Called by the cron handler in index.ts — NOT exposed as MCP tools
 
-export async function processSubconscious(storage: BrainStorage): Promise<SubconsciousState> {
+export async function processSubconscious(
+	storage: BrainStorage,
+	territoryData?: Awaited<ReturnType<BrainStorage["readAllTerritories"]>>
+): Promise<SubconsciousState> {
 	const now = getTimestamp();
 	const cutoff7d = Date.now() - (7 * 24 * 60 * 60 * 1000);
 
-	// Read all territories in parallel
-	const territoryData = await storage.readAllTerritories();
+	// Use passed data or read it
+	const allTerritories = territoryData ?? await storage.readAllTerritories();
 
 	// === Hot Entity Detection ===
 	// Entities mentioned frequently in recent observations
@@ -56,25 +59,41 @@ export async function processSubconscious(storage: BrainStorage): Promise<Subcon
 		trackedEntities.add(rs.entity);
 	}
 
-	for (const { territory, observations } of territoryData) {
+	for (const { territory, observations } of allTerritories) {
 		for (const obs of observations) {
 			try {
 				if (new Date(obs.created).getTime() > cutoff7d) {
 					recentObs.push({ ...obs, territory });
-
-					// Extract entity mentions from tracked entities
-					const contentLower = obs.content.toLowerCase();
-					for (const entity of trackedEntities) {
-						if (contentLower.includes(entity.toLowerCase())) {
-							if (!entityMentions[entity]) {
-								entityMentions[entity] = { count: 0, charges: [] };
-							}
-							entityMentions[entity].count++;
-							entityMentions[entity].charges.push(...(obs.texture?.charge || []));
-						}
-					}
 				}
 			} catch { /* skip malformed date */ }
+		}
+	}
+
+	// Single pass over recentObs: entity mentions, charge pairs, mood charges
+	const pairCounts: Record<string, number> = {};
+	const chargeCounts: Record<string, number> = {};
+
+	for (const obs of recentObs) {
+		// Entity mentions
+		const contentLower = obs.content.toLowerCase();
+		for (const entity of trackedEntities) {
+			if (contentLower.includes(entity.toLowerCase())) {
+				if (!entityMentions[entity]) {
+					entityMentions[entity] = { count: 0, charges: [] };
+				}
+				entityMentions[entity].count++;
+				entityMentions[entity].charges.push(...(obs.texture?.charge || []));
+			}
+		}
+
+		// Charge pairs (co-surfacing) + mood charge counts
+		const charges = obs.texture?.charge || [];
+		for (let i = 0; i < charges.length; i++) {
+			chargeCounts[charges[i]] = (chargeCounts[charges[i]] || 0) + 1;
+			for (let j = i + 1; j < charges.length; j++) {
+				const pair = [charges[i], charges[j]].sort().join("|");
+				pairCounts[pair] = (pairCounts[pair] || 0) + 1;
+			}
 		}
 	}
 
@@ -89,18 +108,6 @@ export async function processSubconscious(storage: BrainStorage): Promise<Subcon
 
 	// === Co-Surfacing Patterns ===
 	// Pairs of charges that appear together frequently
-	const pairCounts: Record<string, number> = {};
-
-	for (const obs of recentObs) {
-		const charges = obs.texture?.charge || [];
-		for (let i = 0; i < charges.length; i++) {
-			for (let j = i + 1; j < charges.length; j++) {
-				const pair = [charges[i], charges[j]].sort().join("|");
-				pairCounts[pair] = (pairCounts[pair] || 0) + 1;
-			}
-		}
-	}
-
 	const coSurfacing = Object.entries(pairCounts)
 		.sort((a, b) => b[1] - a[1])
 		.slice(0, 5)
@@ -111,12 +118,6 @@ export async function processSubconscious(storage: BrainStorage): Promise<Subcon
 
 	// === Mood Inference ===
 	// What mood does recent charge distribution suggest?
-	const chargeCounts: Record<string, number> = {};
-	for (const obs of recentObs) {
-		for (const c of obs.texture?.charge || []) {
-			chargeCounts[c] = (chargeCounts[c] || 0) + 1;
-		}
-	}
 
 	const sortedCharges = Object.entries(chargeCounts).sort((a, b) => b[1] - a[1]);
 	const topCharge = sortedCharges[0];
@@ -143,7 +144,7 @@ export async function processSubconscious(storage: BrainStorage): Promise<Subcon
 	}
 
 	const orphans: Array<{ id: string; territory: string; reason: string }> = [];
-	for (const { territory, observations } of territoryData) {
+	for (const { territory, observations } of allTerritories) {
 		for (const obs of observations) {
 			if (obs.texture?.salience === "foundational") continue;
 			if (obs.texture?.grip === "iron" || obs.texture?.grip === "strong") continue;
@@ -181,14 +182,17 @@ export async function processSubconscious(storage: BrainStorage): Promise<Subcon
 // ============ NOVELTY REGENERATION ============
 // Called by the cron handler — memories unsurfaced for 30+ days regenerate novelty
 
-export async function processNoveltyRegeneration(storage: BrainStorage): Promise<number> {
-	const territoryData = await storage.readAllTerritories();
+export async function processNoveltyRegeneration(
+	storage: BrainStorage,
+	territoryData?: Awaited<ReturnType<BrainStorage["readAllTerritories"]>>
+): Promise<number> {
+	const allTerritories = territoryData ?? await storage.readAllTerritories();
 	let regenerated = 0;
 	const territoriesToWrite: { territory: string; observations: Observation[] }[] = [];
 	const now = Date.now();
 	const thirtyDays = 30 * 24 * 60 * 60 * 1000;
 
-	for (const { territory, observations } of territoryData) {
+	for (const { territory, observations } of allTerritories) {
 		let changed = false;
 
 		for (const obs of observations) {

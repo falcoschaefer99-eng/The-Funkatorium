@@ -284,7 +284,7 @@ export default {
 
 			// Subconscious processing
 			try {
-				await processSubconscious(storage);
+				await processSubconscious(storage, territoryData);
 				console.log(`Daemon [${tenant}]: subconscious processed`);
 			} catch (e) {
 				console.error(`Daemon [${tenant}]: subconscious error`, e);
@@ -292,7 +292,7 @@ export default {
 
 			// Novelty regeneration
 			try {
-				const noveltyChanges = await processNoveltyRegeneration(storage);
+				const noveltyChanges = await processNoveltyRegeneration(storage, territoryData);
 				totalNoveltyChanges += noveltyChanges;
 				console.log(`Daemon [${tenant}]: ${noveltyChanges} novelty regenerations`);
 			} catch (e) {

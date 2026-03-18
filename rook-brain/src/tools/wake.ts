@@ -83,6 +83,7 @@ export async function handleTool(name: string, args: any, storage: BrainStorage)
 			const territories: Record<string, number> = {};
 			const recent: any[] = [];
 			const ironGrip: { obs: Observation; territory: string; pull: number }[] = [];
+			const noveltyPool: { obs: Observation; territory: string; novelty: number }[] = [];
 			let totalObs = 0;
 
 			for (const { territory, observations } of territoryData) {
@@ -115,22 +116,18 @@ export async function handleTool(name: string, args: any, storage: BrainStorage)
 							pull: calculatePullStrength(obs)
 						});
 					}
-				}
-			}
 
-			// Sort recent by time (newest first)
-			recent.sort((a, b) => (b.created || "").localeCompare(a.created || ""));
-
-			// Collect novelty pool — memories with high novelty that haven't surfaced recently
-			const noveltyPool: { obs: Observation; territory: string; novelty: number }[] = [];
-			for (const { territory, observations } of territoryData) {
-				for (const obs of observations) {
+					// Collect high-novelty memories
 					const novelty = obs.texture?.novelty_score ?? 0.5;
 					if (novelty >= 0.7 && obs.texture?.grip !== "iron") {
 						noveltyPool.push({ obs, territory, novelty });
 					}
 				}
 			}
+
+			// Sort recent by time (newest first)
+			recent.sort((a, b) => (b.created || "").localeCompare(a.created || ""));
+
 			noveltyPool.sort((a, b) => b.novelty - a.novelty);
 			const topNovelty = noveltyPool.slice(0, 5).map(({ obs, territory, novelty }) => ({
 				id: obs.id,
