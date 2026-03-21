@@ -67,6 +67,17 @@ Troubleshooting documentation for our products and common issues.
 - [Claude Discord Bridge - Mac Troubleshooting](./arcadia-open-source/guides/Claude%20Discord%20Bridge-Std_Venv_Install-UV_%20alt_MAC_troubleshooting.md)
 - [Discord Bridge Windows Bug Report](./arcadia-open-source/guides/Discord_Bridge_Windows_Bug_Report.md)
 
+### MUSE SpeakEasy — Push-to-Talk Voice Input
+
+> **[github.com/falcoschaefer99-eng/muse-speakeasy](https://github.com/falcoschaefer99-eng/muse-speakeasy)**
+
+Press one key. Speak. Your words appear wherever you type. 100% local, 99 languages, Mac + Windows. Zero cloud dependency — all transcription happens on your machine.
+
+- **One-key voice input** — press to start, press again to stop. Escape to cancel
+- **Ramble-friendly** — up to 5 minutes with smart silence detection
+- **Cross-platform** — Mac (Hammerspoon) + Windows (AutoHotkey) with one-click installers
+- **Apache 2.0 Licensed** — use it however you want
+
 ### MUSE TTS — Free Kokoro TTS for Claude
 
 > **[github.com/falcoschaefer99-eng/muse-tts](https://github.com/falcoschaefer99-eng/muse-tts)**
@@ -100,7 +111,7 @@ Free utilities for AI companion workflows.
 - [Autonomous Wake](./arcadia-open-source/tools/mac/autonomous-wake/) — Let your AI companion wake up and think independently (Mac)
 - [Lock Screen Messenger](./arcadia-open-source/tools/mac/lock-screen-messenger/) — AI companion messages on your lock screen (Mac)
 
-*Check our [Ko-fi shop](https://ko-fi.com/falcothebard/shop) for premium tools including MUSE SpeakEasy, Muse Brain, and more*
+*Check our [Ko-fi shop](https://ko-fi.com/falcothebard/shop) for premium tools including Muse Brain and more*
 
 ---
 
