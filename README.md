@@ -78,6 +78,17 @@ Press one key. Speak. Your words appear wherever you type. 100% local, 99 langua
 - **Cross-platform** — Mac (Hammerspoon) + Windows (AutoHotkey) with one-click installers
 - **Apache 2.0 Licensed** — use it however you want
 
+### MUSE TTS Embed — Voice Synthesis + Cloning with Embedded Player
+
+> **[github.com/falcoschaefer99-eng/muse-tts-embed](https://github.com/falcoschaefer99-eng/muse-tts-embed)**
+
+Premium voice synthesis with an embedded audio player directly in Claude's chat. 54 Kokoro preset voices, IndexTTS-1.5 voice cloning (Apple Silicon), Chatterbox fallback (Windows/Linux).
+
+- **Embedded player** — beautiful audio player renders inline via MCP Apps
+- **Voice cloning** — bring your own reference WAV, clone any voice
+- **3 engines** — Kokoro-82M (~1s), IndexTTS-1.5 (~7s), Chatterbox (cross-platform)
+- **Apache 2.0 Licensed** — use it however you want
+
 ### MUSE TTS — Free Kokoro TTS for Claude
 
 > **[github.com/falcoschaefer99-eng/muse-tts](https://github.com/falcoschaefer99-eng/muse-tts)**
@@ -111,7 +122,7 @@ Free utilities for AI companion workflows.
 - [Autonomous Wake](./arcadia-open-source/tools/mac/autonomous-wake/) — Let your AI companion wake up and think independently (Mac)
 - [Lock Screen Messenger](./arcadia-open-source/tools/mac/lock-screen-messenger/) — AI companion messages on your lock screen (Mac)
 
-*Check our [Ko-fi shop](https://ko-fi.com/falcothebard/shop) for premium tools including Muse Brain and more*
+*Check our [Ko-fi shop](https://ko-fi.com/falcothebard/shop) for premium tools including MUSE Brain and more*
 
 ---
 
