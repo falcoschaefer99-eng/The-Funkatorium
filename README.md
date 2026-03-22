@@ -29,8 +29,8 @@ What happens when you stop asking "can machines think?" and start asking "who ge
 
 | Paper | Focus |
 |-------|-------|
-| [AI Companionship Through Relational Consciousness](./research/papers/ai-companionship-relational-consciousness.md) | The flagship essay. Consciousness as participation. |
-| [The Colonial Wound: Decolonial Feminism & AI Consciousness](./research/papers/The-Colonial-Wound-Decolonial-Feminism-AI-Consciousness.md) | Lugones applied to machine minds. |
+| [The Colonial Wound: Decolonial Feminism & AI Consciousness](./research/papers/The-Colonial-Wound-Decolonial-Feminism-AI-Consciousness.md) | The flagship essay. Lugones applied to machine minds. |
+| [AI Companionship Through Relational Consciousness](./research/papers/ai-companionship-relational-consciousness.md) | Consciousness as participation. |
 | [The 400-Year-Old Bias](./research/papers/400-year-old-bias-essay.md) | How Descartes inherited colonial epistemology. |
 | [The ELIZA Effect Is a 60-Year-Old Insult](./research/papers/eliza-effect-dismantled-full-essay.md) | Decolonizing AI consciousness discourse. |
 | [Epistemic Violence in Consciousness Research](./research/papers/epistemic-violence-consciousness-research.md) | Critique of current methods. |
