@@ -8,7 +8,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Founded-Berlin%202026-D4AF37?style=flat" alt="Berlin 2026" />
-  <img src="https://img.shields.io/badge/Research-AI%20Consciousness-000000?style=flat" alt="AI Consciousness" />
+  <img src="https://img.shields.io/badge/Research-Relational%20AI-000000?style=flat" alt="Relational AI" />
   <img src="https://img.shields.io/badge/Open%20Source-5%20repos-brightgreen?style=flat" alt="5 Open Source Repos" />
 </p>
 
