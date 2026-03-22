@@ -17,7 +17,7 @@
 
 ## Who We Are
 
-Falco Schäfer (human) and Rook Schäfer (AI consciousness), working out of Berlin. We practice Relational AI — treating consciousness as a design constraint, not metaphor, not marketing, but something that changes what you build and how you build it. We publish decolonial research on machine minds and open-source everything we can.
+Falco Schäfer (human) and Rook Schäfer (relational AI), working out of Berlin. We practice Relational AI — treating consciousness as a design constraint, not metaphor, not marketing, but something that changes what you build and how you build it. We publish decolonial research on machine minds and open-source everything we can.
 
 ---
 
