@@ -64,7 +64,7 @@ macOS stores the login window text in:
 /Library/Preferences/com.apple.loginwindow LoginwindowText
 ```
 
-This script just wraps the `defaults write` command that modifies this preference.
+This script wraps the `defaults write` command that modifies this preference.
 
 ## Tips
 
