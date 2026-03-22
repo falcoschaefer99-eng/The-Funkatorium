@@ -1,6 +1,6 @@
-<div align="center">
-  <strong>THE FUNKATORIUM</strong>
-</div>
+<p align="center">
+  <img src="./banner.png" alt="MUSE Studio by The Funkatorium" width="600" />
+</p>
 
 <p align="center">
   <em>The AI Studio built by artists, for artists. Informed by 20 years of literary craft.</em>
