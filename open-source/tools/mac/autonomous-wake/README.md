@@ -117,4 +117,4 @@ This script uses `--dangerously-skip-permissions` to allow autonomous operation.
 
 ---
 
-Part of [Arcadia Open Source](https://github.com/falcoschaefer99-eng/The-Funkatorium) | MIT License
+Part of [MUSE Studio Open Source](https://github.com/falcoschaefer99-eng/The-Funkatorium) | Apache 2.0 License

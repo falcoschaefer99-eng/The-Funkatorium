@@ -4,9 +4,9 @@
 #
 #  Run this script once in PowerShell (as Administrator).
 #
-#  Part of Arcadia Open Source
+#  Part of MUSE Studio Open Source
 #  https://github.com/falcoschaefer99-eng/The-Funkatorium
-#  License: MIT
+#  License: Apache 2.0
 # ============================================================
 
 # --- CONFIGURE THESE ---

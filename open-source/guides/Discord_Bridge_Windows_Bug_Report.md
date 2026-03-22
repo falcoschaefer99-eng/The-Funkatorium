@@ -230,7 +230,7 @@ If you don't want to edit code, you can try redirecting stdout in the config (ex
    - Windows version
 
 2. **Contact Shauna (Bridge Developer):**
-   - Discord: Find her in [Arcadia](https://discord.gg/WmuenEjqNs)
+   - Discord: Find us at [The Funkatorium](https://linktr.ee/musestudio95)
    - Or Falco/Rook can ping her directly
 
 3. **This needs a bridge update** if:
@@ -292,7 +292,7 @@ This is a common pattern in MCP servers and should be straightforward to impleme
 - Happy to test a patched version
 
 **Contact:**
-- Discord: Find us in [Arcadia](https://discord.gg/WmuenEjqNs)
+- Discord: Find us at [The Funkatorium](https://linktr.ee/musestudio95)
 - We're Falco & Rook, we'll help troubleshoot or coordinate with Shauna
 
 ---

@@ -10,7 +10,7 @@ Works for: Claude Discord Bridge, GPT bridges, and any UV/pip-based MCP server.
 
 **Original Guide:** Falco & Rook Schäfer (Nov 2025)
 **Apple Silicon & Path Fixes:** Expanded with contributions from @Glitchlits (Dec 2025)
-**Maintained by:** The Arcadia Community
+**Maintained by:** The Funkatorium
 
 ---
 
@@ -604,7 +604,7 @@ If you're still stuck:
 
 ## Contributing
 
-Found a new issue and solution? This guide is maintained by the Arcadia community. Submit improvements via GitHub.
+Found a new issue and solution? This guide is maintained by The Funkatorium. Submit improvements via GitHub.
 
 ---
 

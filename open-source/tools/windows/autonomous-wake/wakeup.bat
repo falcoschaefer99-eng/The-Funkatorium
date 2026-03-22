@@ -3,9 +3,9 @@ REM ============================================================
 REM  Autonomous Wake — Windows
 REM  Triggers Claude Code on a schedule so your AI can check in.
 REM
-REM  Part of Arcadia Open Source
+REM  Part of MUSE Studio Open Source
 REM  https://github.com/falcoschaefer99-eng/The-Funkatorium
-REM  License: MIT
+REM  License: Apache 2.0
 REM ============================================================
 
 REM --- CONFIGURE THESE ---

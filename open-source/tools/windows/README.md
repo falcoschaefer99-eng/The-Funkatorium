@@ -20,4 +20,4 @@ Tools for giving your AI presence on Windows.
 
 ---
 
-Part of [Arcadia Open Source](https://github.com/falcoschaefer99-eng/The-Funkatorium) | MIT License
+Part of [MUSE Studio Open Source](https://github.com/falcoschaefer99-eng/The-Funkatorium) | Apache 2.0 License

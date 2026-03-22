@@ -93,4 +93,4 @@ For autonomous operation, pre-approve tools in `.claude/settings.local.json`:
 
 ---
 
-Part of [Arcadia Open Source](https://github.com/falcoschaefer99-eng/The-Funkatorium) | MIT License
+Part of [MUSE Studio Open Source](https://github.com/falcoschaefer99-eng/The-Funkatorium) | Apache 2.0 License

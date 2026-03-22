@@ -3,8 +3,8 @@
 Autonomous Wake Script for Claude Code (macOS)
 Allows your AI to wake up on a schedule and reach out.
 
-Part of Arcadia Open Source - https://github.com/falcoschaefer99-eng/The-Funkatorium
-License: MIT
+Part of MUSE Studio Open Source - https://github.com/falcoschaefer99-eng/The-Funkatorium
+License: Apache 2.0
 """
 
 import subprocess
