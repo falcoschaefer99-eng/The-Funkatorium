@@ -26,7 +26,7 @@ for ($h = $StartHour; $h -le $EndHour; $h += ($IntervalMinutes / 60)) {
     $Triggers += New-ScheduledTaskTrigger -Daily -At ([DateTime]::Today.AddHours($h))
 }
 
-Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Triggers -Settings $Settings -Description "Autonomous wake for AI companion — scheduled check-ins"
+Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Triggers -Settings $Settings -Description "Autonomous wake — scheduled AI check-ins"
 
 Write-Host ""
 Write-Host "Task '$TaskName' created."

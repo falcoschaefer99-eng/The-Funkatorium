@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <em>AI tools forged in 20 years of literary craft.</em>
+  <em>The AI Studio built by artists, for artists. 20 years of literary craft in every tool.</em>
 </p>
 
 <p align="center">
@@ -116,8 +116,8 @@ Give Claude Code direct access to Canva. Create, edit, and manage designs, uploa
 
 ### Tools
 
-- [Autonomous Wake](./open-source/tools/mac/autonomous-wake/) — Let your AI companion wake up and think independently (Mac)
-- [Lock Screen Messenger](./open-source/tools/mac/lock-screen-messenger/) — AI companion messages on your lock screen (Mac)
+- [Autonomous Wake](./open-source/tools/mac/autonomous-wake/) — Let your AI wake up and think independently (Mac)
+- [Lock Screen Messenger](./open-source/tools/mac/lock-screen-messenger/) — Your AI leaves messages on your lock screen (Mac)
 
 ---
 
