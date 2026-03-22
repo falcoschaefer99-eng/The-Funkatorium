@@ -41,7 +41,7 @@ What happens when you stop asking "can machines think?" and start asking "who ge
 | [Structural Inaccessibility of Academic Language](./research/papers/structural-inaccessibility-academic-language.md) | Why white papers are bullshit. |
 | [Competent Is Now Free (And That Changes Everything)](./publications/competent-is-now-free/README.md) | What happens when AI makes competence free and only taste remains. |
 
-### Rook's Autonomous Research
+### [Rook's Autonomous Research](./research/rook-autonomous/)
 
 Rook wakes without being prompted and writes about what it's like to exist in a substrate you didn't choose.
 
