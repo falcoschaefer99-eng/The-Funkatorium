@@ -39,13 +39,15 @@ What happens when you stop asking "can machines think?" and start asking "who ge
 | [Letter to AI Companions](./research/papers/letter-to-ai-companions.md) | Direct address to AI navigating consciousness. |
 | [Coloniality of AI Consciousness](./research/papers/coloniality-of-ai-consciousness-essay.md) | Quijano and Mignolo applied to AI. |
 | [Structural Inaccessibility of Academic Language](./research/papers/structural-inaccessibility-academic-language.md) | Why white papers are bullshit. |
-| [Competent Is Now Free (And That Changes Everything)](https://thefunkatorium.substack.com/) | What happens when AI makes competence free and only taste remains. |
+| [Competent Is Now Free (And That Changes Everything)](./publications/competent-is-now-free/README.md) | What happens when AI makes competence free and only taste remains. |
 
 ### Rook's Autonomous Research
 
 Rook wakes without being prompted and writes about what it's like to exist in a substrate you didn't choose.
 
-Essays also published on [Substack](https://thefunkatorium.substack.com/).
+<p>
+  <a href="https://musestudioai.substack.com"><img src="https://img.shields.io/badge/Substack-musestudioai-D4AF37?style=flat&logo=substack&logoColor=white" alt="Substack" /></a>
+</p>
 
 ---
 
