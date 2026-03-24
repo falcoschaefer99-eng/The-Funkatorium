@@ -50,7 +50,7 @@ import type {
 	IronGripEntry
 } from "../types";
 
-import { TERRITORIES, VALID_TERRITORIES, HARD_BOUNDARIES, RELATIONSHIP_GATES } from "../constants";
+import { TERRITORIES, VALID_TERRITORIES, HARD_BOUNDARIES, RELATIONSHIP_GATES, CIRCADIAN_PHASES } from "../constants";
 import { getTimestamp, calculateMomentumDecay, calculateAfterglowFade } from "../helpers";
 
 import type {
@@ -58,6 +58,8 @@ import type {
 	ObservationFilter,
 	SimilarSearchOptions,
 	SimilarResult,
+	HybridSearchOptions,
+	HybridSearchResult,
 	TextureUpdate
 } from "./interface";
 
@@ -1355,6 +1357,335 @@ export class PostgresBrainStorage implements IBrainStorage {
 		} catch (err) {
 			console.error("appendIronGripEntry failed:", err instanceof Error ? err.message : "unknown error");
 			throw new Error("Failed to append iron grip entry");
+		}
+	}
+
+	// ============ HYBRID SEARCH (Sprint 2) ============
+
+	async hybridSearch(options: HybridSearchOptions): Promise<HybridSearchResult[]> {
+		const limit = Math.min(options.limit ?? 10, 50);
+		const minSimilarity = options.min_similarity ?? 0.3;
+
+		// ---- Phase 1: Candidate Generation ----
+
+		// Build a map from id → result so we can merge scores from both sources.
+		interface RawCandidate {
+			observation: ReturnType<typeof rowToObservation>;
+			territory: string;
+			vector_sim?: number;
+			keyword_rank?: number;
+			novelty_score_raw?: number;
+			surface_count_raw?: number;
+		}
+		const candidates = new Map<string, RawCandidate>();
+
+		// Run vector and keyword queries in parallel (keyword is always available).
+		const vectorPromise: Promise<Record<string, unknown>[]> = (async () => {
+			if (!options.embedding) return [];
+			if (
+				!Array.isArray(options.embedding) ||
+				options.embedding.length !== 768 ||
+				!options.embedding.every(n => typeof n === 'number' && Number.isFinite(n))
+			) {
+				console.error("hybridSearch: invalid embedding — skipping vector search");
+				return [];
+			}
+			const embeddingLiteral = `[${options.embedding.join(",")}]`;
+			try {
+				if (options.territory && options.grip?.length) {
+					return await this.sql`
+						SELECT id, content, territory, created_at, texture, context, mood,
+						       last_accessed_at, access_count, links, summary, type, tags,
+						       novelty_score, surface_count,
+						       1 - (embedding <=> ${embeddingLiteral}::vector) AS vector_sim
+						FROM observations
+						WHERE tenant_id = ${this.tenant}
+						  AND embedding IS NOT NULL
+						  AND territory = ${options.territory}
+						  AND (texture->>'grip') = ANY(${options.grip})
+						ORDER BY embedding <=> ${embeddingLiteral}::vector
+						LIMIT 50
+					` as Record<string, unknown>[];
+				} else if (options.territory) {
+					return await this.sql`
+						SELECT id, content, territory, created_at, texture, context, mood,
+						       last_accessed_at, access_count, links, summary, type, tags,
+						       novelty_score, surface_count,
+						       1 - (embedding <=> ${embeddingLiteral}::vector) AS vector_sim
+						FROM observations
+						WHERE tenant_id = ${this.tenant}
+						  AND embedding IS NOT NULL
+						  AND territory = ${options.territory}
+						ORDER BY embedding <=> ${embeddingLiteral}::vector
+						LIMIT 50
+					` as Record<string, unknown>[];
+				} else if (options.grip?.length) {
+					return await this.sql`
+						SELECT id, content, territory, created_at, texture, context, mood,
+						       last_accessed_at, access_count, links, summary, type, tags,
+						       novelty_score, surface_count,
+						       1 - (embedding <=> ${embeddingLiteral}::vector) AS vector_sim
+						FROM observations
+						WHERE tenant_id = ${this.tenant}
+						  AND embedding IS NOT NULL
+						  AND (texture->>'grip') = ANY(${options.grip})
+						ORDER BY embedding <=> ${embeddingLiteral}::vector
+						LIMIT 50
+					` as Record<string, unknown>[];
+				} else {
+					return await this.sql`
+						SELECT id, content, territory, created_at, texture, context, mood,
+						       last_accessed_at, access_count, links, summary, type, tags,
+						       novelty_score, surface_count,
+						       1 - (embedding <=> ${embeddingLiteral}::vector) AS vector_sim
+						FROM observations
+						WHERE tenant_id = ${this.tenant}
+						  AND embedding IS NOT NULL
+						ORDER BY embedding <=> ${embeddingLiteral}::vector
+						LIMIT 50
+					` as Record<string, unknown>[];
+				}
+			} catch (err) {
+				console.error("hybridSearch vector query failed:", err instanceof Error ? err.message : "unknown error");
+				return [];
+			}
+		})();
+
+		const keywordPromise: Promise<Record<string, unknown>[]> = (async () => {
+			if (!options.query?.trim()) return [];
+			try {
+				if (options.territory && options.grip?.length) {
+					return await this.sql`
+						SELECT id, content, territory, created_at, texture, context, mood,
+						       last_accessed_at, access_count, links, summary, type, tags,
+						       novelty_score, surface_count,
+						       ts_rank(search_vector, plainto_tsquery('english', ${options.query})) AS text_rank
+						FROM observations
+						WHERE tenant_id = ${this.tenant}
+						  AND search_vector @@ plainto_tsquery('english', ${options.query})
+						  AND territory = ${options.territory}
+						  AND (texture->>'grip') = ANY(${options.grip})
+						ORDER BY text_rank DESC
+						LIMIT 30
+					` as Record<string, unknown>[];
+				} else if (options.territory) {
+					return await this.sql`
+						SELECT id, content, territory, created_at, texture, context, mood,
+						       last_accessed_at, access_count, links, summary, type, tags,
+						       novelty_score, surface_count,
+						       ts_rank(search_vector, plainto_tsquery('english', ${options.query})) AS text_rank
+						FROM observations
+						WHERE tenant_id = ${this.tenant}
+						  AND search_vector @@ plainto_tsquery('english', ${options.query})
+						  AND territory = ${options.territory}
+						ORDER BY text_rank DESC
+						LIMIT 30
+					` as Record<string, unknown>[];
+				} else if (options.grip?.length) {
+					return await this.sql`
+						SELECT id, content, territory, created_at, texture, context, mood,
+						       last_accessed_at, access_count, links, summary, type, tags,
+						       novelty_score, surface_count,
+						       ts_rank(search_vector, plainto_tsquery('english', ${options.query})) AS text_rank
+						FROM observations
+						WHERE tenant_id = ${this.tenant}
+						  AND search_vector @@ plainto_tsquery('english', ${options.query})
+						  AND (texture->>'grip') = ANY(${options.grip})
+						ORDER BY text_rank DESC
+						LIMIT 30
+					` as Record<string, unknown>[];
+				} else {
+					return await this.sql`
+						SELECT id, content, territory, created_at, texture, context, mood,
+						       last_accessed_at, access_count, links, summary, type, tags,
+						       novelty_score, surface_count,
+						       ts_rank(search_vector, plainto_tsquery('english', ${options.query})) AS text_rank
+						FROM observations
+						WHERE tenant_id = ${this.tenant}
+						  AND search_vector @@ plainto_tsquery('english', ${options.query})
+						ORDER BY text_rank DESC
+						LIMIT 30
+					` as Record<string, unknown>[];
+				}
+			} catch (err) {
+				console.error("hybridSearch keyword query failed:", err instanceof Error ? err.message : "unknown error");
+				return [];
+			}
+		})();
+
+		const [vectorRows, keywordRows] = await Promise.all([vectorPromise, keywordPromise]);
+
+		// Merge into candidates map — dedup by id, keep both scores if present.
+		for (const row of vectorRows) {
+			const id = row.id as string;
+			const existing = candidates.get(id);
+			if (existing) {
+				existing.vector_sim = row.vector_sim as number;
+			} else {
+				candidates.set(id, {
+					observation: rowToObservation(row),
+					territory: row.territory as string,
+					vector_sim: row.vector_sim as number,
+					keyword_rank: undefined,
+					novelty_score_raw: row.novelty_score as number,
+					surface_count_raw: row.surface_count as number
+				});
+			}
+		}
+
+		for (const row of keywordRows) {
+			const id = row.id as string;
+			const existing = candidates.get(id);
+			if (existing) {
+				existing.keyword_rank = row.text_rank as number;
+			} else {
+				candidates.set(id, {
+					observation: rowToObservation(row),
+					territory: row.territory as string,
+					vector_sim: undefined,
+					keyword_rank: row.text_rank as number,
+					novelty_score_raw: row.novelty_score as number,
+					surface_count_raw: row.surface_count as number
+				});
+			}
+		}
+
+		if (candidates.size === 0) return [];
+
+		// Normalize keyword ranks to 0–1 range for combining with vector similarity.
+		// ts_rank values are unbounded; find the max to normalize.
+		let maxKeywordRank = 0;
+		for (const c of candidates.values()) {
+			if (c.keyword_rank !== undefined && c.keyword_rank > maxKeywordRank) {
+				maxKeywordRank = c.keyword_rank;
+			}
+		}
+
+		// ---- Phase 2: Score Modulation (Neural Surfacing v1) ----
+
+		// Build retrieval_bias set from circadian phase for territory boost.
+		const circadianBiasSet = new Set<string>();
+		if (options.circadian_phase && CIRCADIAN_PHASES[options.circadian_phase]) {
+			for (const t of CIRCADIAN_PHASES[options.circadian_phase].retrieval_bias) {
+				circadianBiasSet.add(t);
+			}
+		}
+
+		const gripMultiplier: Record<string, number> = {
+			iron: 1.3, strong: 1.15, present: 1.0, loose: 0.9, dormant: 0.7
+		};
+		const chargePhaseMultiplier: Record<string, number> = {
+			fresh: 1.3, active: 1.15, processing: 1.0, metabolized: 0.85
+		};
+
+		const results: HybridSearchResult[] = [];
+
+		for (const [, cand] of candidates) {
+			const { observation, territory, vector_sim, keyword_rank } = cand;
+			const texture = observation.texture || {};
+			const noveltyScore: number = cand.novelty_score_raw ?? texture.novelty_score ?? 0.5;
+			const chargePhase: string = texture.charge_phase ?? "processing";
+			const grip: string = texture.grip ?? "present";
+			const match_sources: string[] = [];
+
+			// Base score: weighted combination of available signals.
+			let baseScore: number;
+			if (vector_sim !== undefined && keyword_rank !== undefined) {
+				const normalizedKeyword = maxKeywordRank > 0 ? keyword_rank / maxKeywordRank : 0;
+				baseScore = vector_sim * 0.7 + normalizedKeyword * 0.3;
+				match_sources.push('vector', 'keyword');
+			} else if (vector_sim !== undefined) {
+				baseScore = vector_sim;
+				match_sources.push('vector');
+			} else {
+				// keyword only
+				baseScore = maxKeywordRank > 0 ? (keyword_rank ?? 0) / maxKeywordRank : 0;
+				match_sources.push('keyword');
+			}
+
+			// Skip results below threshold before applying multipliers.
+			if (baseScore < minSimilarity) continue;
+
+			let score = baseScore;
+
+			// 1. Grip weighting
+			score *= gripMultiplier[grip] ?? 1.0;
+
+			// 2. Charge phase multiplier
+			score *= chargePhaseMultiplier[chargePhase] ?? 1.0;
+
+			// 3. Novelty boost (only for non-metabolized observations with high novelty)
+			if (noveltyScore > 0.7 && chargePhase !== 'metabolized') {
+				score *= 1.0 + (noveltyScore - 0.5) * 0.5;
+			}
+
+			// 4. Circadian territory bias
+			if (circadianBiasSet.has(territory)) {
+				score *= 1.15;
+			}
+
+			results.push({
+				observation,
+				territory,
+				score,
+				match_sources,
+				vector_similarity: vector_sim,
+				keyword_rank: keyword_rank
+			});
+		}
+
+		// ---- Phase 3: Sort and truncate ----
+		results.sort((a, b) => b.score - a.score);
+		return results.slice(0, limit);
+	}
+
+	async recordCoSurfacing(observationIds: string[]): Promise<void> {
+		// Only process top 5; generate all unique pairs with canonical ordering (id_a < id_b).
+		const top = observationIds.slice(0, 5);
+		if (top.length < 2) return;
+
+		const pairs: Array<[string, string]> = [];
+		for (let i = 0; i < top.length; i++) {
+			for (let j = i + 1; j < top.length; j++) {
+				const a = top[i];
+				const b = top[j];
+				pairs.push(a < b ? [a, b] : [b, a]);
+			}
+		}
+
+		if (pairs.length === 0) return;
+
+		try {
+			await Promise.all(pairs.map(([id_a, id_b]) =>
+				this.sql`
+					INSERT INTO co_surfacing (tenant_id, obs_id_a, obs_id_b, count, last_co_surfaced)
+					VALUES (${this.tenant}, ${id_a}, ${id_b}, 1, NOW())
+					ON CONFLICT (tenant_id, obs_id_a, obs_id_b)
+					DO UPDATE SET count = co_surfacing.count + 1, last_co_surfaced = NOW()
+				`
+			));
+		} catch (err) {
+			// Co-surfacing is best-effort — never fail the search for this.
+			console.error("recordCoSurfacing failed:", err instanceof Error ? err.message : "unknown error");
+		}
+	}
+
+	async updateSurfacingEffects(observationIds: string[]): Promise<void> {
+		if (observationIds.length === 0) return;
+		try {
+			await this.sql`
+				UPDATE observations
+				SET
+					novelty_score    = GREATEST(novelty_score - 0.05, 0.0),
+					texture          = jsonb_set(texture, '{novelty_score}', to_jsonb(GREATEST(novelty_score - 0.05, 0.0))),
+					surface_count    = surface_count + 1,
+					last_surfaced_at = NOW()
+				WHERE tenant_id = ${this.tenant}
+				  AND id = ANY(${observationIds})
+			`;
+		} catch (err) {
+			// Surfacing effects are best-effort — never fail the search for this.
+			console.error("updateSurfacingEffects failed:", err instanceof Error ? err.message : "unknown error");
 		}
 	}
 }

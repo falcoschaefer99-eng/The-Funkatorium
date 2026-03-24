@@ -13,7 +13,8 @@ import {
 	extractEssence,
 	calculatePullStrength,
 	smartParseObservation,
-	generateSummary
+	generateSummary,
+	getCurrentCircadianPhase
 } from "../helpers";
 import type { ToolContext } from "./context";
 import { createEmbeddingProvider } from "../embedding/index";
@@ -63,10 +64,12 @@ export const TOOL_DEFS = [
 	},
 	{
 		name: "mind_query",
-		description: "Unified memory query. Find memories by: recency (days/hours), grip/salience, pull strength, or surface all. Replaces mind_recent, mind_surface, mind_surface_pulls. Full content available via full=true.",
+		description: "Unified memory query. Find memories by: free-text query (hybrid search), recency (days/hours), grip/salience, pull strength, or surface all. When query is provided, uses hybrid vector + keyword search with Neural Surfacing modulation. Replaces mind_recent, mind_surface, mind_surface_pulls. Full content available via full=true.",
 		inputSchema: {
 			type: "object",
 			properties: {
+				// Free-text hybrid search (activates hybridSearch path when present)
+				query: { type: "string", description: "Free-text query — activates hybrid vector + keyword search with Neural Surfacing modulation" },
 				// Temporal filter
 				days: { type: "number", description: "Filter to observations from last N days" },
 				hours: { type: "number", description: "Filter to observations from last N hours (overrides days)" },
@@ -76,12 +79,12 @@ export const TOOL_DEFS = [
 				territory: { type: "string", enum: Object.keys(TERRITORIES), description: "Filter to one territory" },
 				charge: { type: "string", description: "Filter to observations containing this charge" },
 				type: { type: "string", description: "Filter by observation type (journal, whisper, vow, etc.)" },
-				// Sort
+				// Sort (only used when query is absent)
 				sort_by: {
 					type: "string",
 					enum: ["recency", "pull", "access"],
 					default: "recency",
-					description: "Sort by: recency (newest first), pull (strongest pull first), access (most accessed first)"
+					description: "Sort by: recency (newest first), pull (strongest pull first), access (most accessed first). Ignored when query is present."
 				},
 				// Output
 				limit: { type: "number", default: 10, description: "Max results" },
@@ -300,6 +303,85 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 
 		case "mind_query": {
 			const limit = Math.min(args.limit || 10, 50);
+
+			// ---- Hybrid search path: activated when free-text query is present ----
+			if (args.query && typeof args.query === 'string' && args.query.trim()) {
+				const query: string = args.query.trim();
+
+				// Generate embedding if AI binding available.
+				let embedding: number[] | undefined;
+				if (context.ai) {
+					try {
+						const provider = createEmbeddingProvider(context.ai);
+						embedding = await provider.embedText(query);
+					} catch (err) {
+						console.error("mind_query embed failed:", err instanceof Error ? err.message : "unknown error");
+					}
+				}
+
+				// Grip filter → array of allowed grip values
+				const gripOrder: Record<string, number> = { iron: 0, strong: 1, present: 2, loose: 3, dormant: 4 };
+				let gripFilter: string[] | undefined;
+				if (args.grip && args.grip !== "all") {
+					const minLevel = gripOrder[args.grip] ?? 4;
+					gripFilter = Object.keys(gripOrder).filter(g => gripOrder[g] <= minLevel);
+				}
+
+				const circadianInfo = getCurrentCircadianPhase();
+				const territory = args.territory || undefined;
+
+				const hybridResults = await storage.hybridSearch({
+					query,
+					embedding,
+					territory,
+					grip: gripFilter,
+					limit,
+					circadian_phase: circadianInfo.phase
+				});
+
+				// Fire-and-forget side effects.
+				if (hybridResults.length > 0) {
+					const returnedIds = hybridResults.map(r => r.observation.id);
+					if (context.waitUntil) {
+						context.waitUntil(
+							Promise.all([
+								storage.recordCoSurfacing(returnedIds),
+								storage.updateSurfacingEffects(returnedIds)
+							]).catch(err => console.error("mind_query hybrid side effects failed:", err instanceof Error ? err.message : "unknown error"))
+						);
+					}
+				}
+
+				return {
+					query,
+					search_mode: "hybrid",
+					filter: {
+						territory: args.territory,
+						grip: args.grip
+					},
+					count: hybridResults.length,
+					observations: hybridResults.map(r => {
+						const base: any = {
+							id: r.observation.id,
+							territory: r.territory,
+							essence: extractEssence(r.observation),
+							score: Math.round(r.score * 100) / 100,
+							match_in: r.match_sources,
+							charge: r.observation.texture?.charge || [],
+							grip: r.observation.texture?.grip,
+							created: r.observation.created
+						};
+						if (args.full) {
+							base.content = r.observation.content;
+							base.texture = r.observation.texture;
+						}
+						return base;
+					}),
+					hint: "Use mind_pull(id) for full content"
+				};
+			}
+
+			// ---- Filter path: no query — use existing queryObservations logic ----
 			const sortBy = args.sort_by || "recency";
 
 			// Determine time cutoff

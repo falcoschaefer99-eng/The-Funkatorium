@@ -69,6 +69,36 @@ export interface SimilarResult {
 	similarity: number;
 }
 
+/** Options for hybrid search (vector + full-text + Neural Surfacing modulation). */
+export interface HybridSearchOptions {
+	query: string;
+	/** Pre-computed query embedding — if omitted, vector search is skipped. */
+	embedding?: number[];
+	territory?: string;
+	grip?: string[];
+	charge_phase?: string;
+	/** Minimum composite score threshold. Defaults to 0.3. */
+	min_similarity?: number;
+	/** Max results to return. Defaults to 10. */
+	limit?: number;
+	/** Current circadian phase name — used for territory bias modulation. */
+	circadian_phase?: string;
+}
+
+/** A hybrid search result with composite score and source indicators. */
+export interface HybridSearchResult {
+	observation: Observation;
+	territory: string;
+	/** Composite score after all Neural Surfacing modulations. */
+	score: number;
+	/** Which search paths returned this observation. */
+	match_sources: string[];
+	/** Raw cosine similarity before modulation (if vector search ran). */
+	vector_similarity?: number;
+	/** Raw ts_rank score before modulation (if keyword search ran). */
+	keyword_rank?: number;
+}
+
 /** Options for bulk texture updates (decay daemon). */
 export interface TextureUpdate {
 	id: string;
@@ -166,6 +196,26 @@ export interface IBrainStorage {
 	 * that are not yet linked to it. Returns candidates sorted by similarity.
 	 */
 	findUnlinkedSimilar(id: string, limit?: number): Promise<SimilarResult[]>;
+
+	/**
+	 * Hybrid search: combines vector similarity + full-text keyword search,
+	 * then applies Neural Surfacing v1 score modulations (grip, charge phase,
+	 * novelty, circadian territory bias).
+	 */
+	hybridSearch(options: HybridSearchOptions): Promise<HybridSearchResult[]>;
+
+	/**
+	 * Record co-surfacing pairs for observations that appeared together in a
+	 * search result set. Increments count if pair already exists.
+	 * Only records pairs from the top 5 results (canonical ordering: id_a < id_b).
+	 */
+	recordCoSurfacing(observationIds: string[]): Promise<void>;
+
+	/**
+	 * Apply post-search surfacing effects to a set of returned observation IDs:
+	 * decrement novelty_score by 0.05 (min 0), increment surface_count, stamp last_surfaced_at.
+	 */
+	updateSurfacingEffects(observationIds: string[]): Promise<void>;
 
 	// --- Open Loops ---
 
