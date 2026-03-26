@@ -53,10 +53,16 @@ import type {
 	EntityFilter,
 	DaemonProposal,
 	OrphanObservation,
-	DaemonConfig
+	DaemonConfig,
+	ObservationVersion,
+	ProcessingEntry,
+	ConsolidationCandidate,
+	DispatchFeedback,
+	DispatchStat,
+	Task
 } from "../types";
 
-import { TERRITORIES, VALID_TERRITORIES, HARD_BOUNDARIES, RELATIONSHIP_GATES, CIRCADIAN_PHASES } from "../constants";
+import { TERRITORIES, VALID_TERRITORIES, HARD_BOUNDARIES, RELATIONSHIP_GATES, CIRCADIAN_PHASES, ALLOWED_TENANTS } from "../constants";
 import { getTimestamp, calculateMomentumDecay, calculateAfterglowFade, generateId } from "../helpers";
 
 import type {
@@ -118,7 +124,9 @@ function rowToOpenLoop(row: Record<string, unknown>): OpenLoop {
 		territory: row.territory as string,
 		created: row.created_at as string,
 		resolved: row.resolved_at as string | undefined,
-		resolution_note: row.resolution_note as string | undefined
+		resolution_note: row.resolution_note as string | undefined,
+		mode: (row.mode as OpenLoop['mode']) ?? undefined,
+		linked_entity_ids: (row.linked_entity_ids as string[] | null) ?? undefined
 	};
 }
 
@@ -130,7 +138,8 @@ function rowToLetter(row: Record<string, unknown>): Letter {
 		content: row.content as string,
 		timestamp: row.timestamp as string,
 		read: row.read as boolean,
-		charges: (row.charges as string[] | null) ?? undefined
+		charges: (row.charges as string[] | null) ?? undefined,
+		letter_type: (row.letter_type as Letter['letter_type']) ?? undefined
 	};
 }
 
@@ -189,6 +198,9 @@ export class PostgresBrainStorage implements IBrainStorage {
 	}
 
 	forTenant(tenant: string): IBrainStorage {
+		if (!ALLOWED_TENANTS.includes(tenant as typeof ALLOWED_TENANTS[number])) {
+			throw new Error("Invalid tenant");
+		}
 		return new PostgresBrainStorage(this.databaseUrl, tenant);
 	}
 
@@ -873,7 +885,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 	async readOpenLoops(): Promise<OpenLoop[]> {
 		try {
 			const rows = await this.sql`
-				SELECT id, content, status, territory, created_at, resolved_at, resolution_note
+				SELECT id, content, status, territory, created_at, resolved_at, resolution_note, mode, linked_entity_ids
 				FROM open_loops
 				WHERE tenant_id = ${this.tenant}
 				ORDER BY created_at ASC
@@ -891,16 +903,18 @@ export class PostgresBrainStorage implements IBrainStorage {
 				await sql`DELETE FROM open_loops WHERE tenant_id = ${this.tenant}`;
 				for (const loop of loops) {
 					await sql`
-						INSERT INTO open_loops (id, tenant_id, content, status, territory, created_at, resolved_at, resolution_note)
+						INSERT INTO open_loops (id, tenant_id, content, status, territory, created_at, resolved_at, resolution_note, mode, linked_entity_ids)
 						VALUES (
 							${loop.id}, ${this.tenant}, ${loop.content}, ${loop.status},
 							${loop.territory}, ${loop.created},
-							${loop.resolved ?? null}, ${loop.resolution_note ?? null}
+							${loop.resolved ?? null}, ${loop.resolution_note ?? null},
+							${loop.mode ?? 'standard'}, ${loop.linked_entity_ids ?? []}
 						)
 						ON CONFLICT (id) DO UPDATE SET
 							content = EXCLUDED.content, status = EXCLUDED.status,
 							territory = EXCLUDED.territory, resolved_at = EXCLUDED.resolved_at,
-							resolution_note = EXCLUDED.resolution_note
+							resolution_note = EXCLUDED.resolution_note,
+							mode = EXCLUDED.mode, linked_entity_ids = EXCLUDED.linked_entity_ids
 					`;
 				}
 			});
@@ -913,11 +927,12 @@ export class PostgresBrainStorage implements IBrainStorage {
 	async appendOpenLoop(loop: OpenLoop): Promise<void> {
 		try {
 			await this.sql`
-				INSERT INTO open_loops (id, tenant_id, content, status, territory, created_at, resolved_at, resolution_note)
+				INSERT INTO open_loops (id, tenant_id, content, status, territory, created_at, resolved_at, resolution_note, mode, linked_entity_ids)
 				VALUES (
 					${loop.id}, ${this.tenant}, ${loop.content}, ${loop.status},
 					${loop.territory}, ${loop.created},
-					${loop.resolved ?? null}, ${loop.resolution_note ?? null}
+					${loop.resolved ?? null}, ${loop.resolution_note ?? null},
+					${loop.mode ?? 'standard'}, ${loop.linked_entity_ids ?? []}
 				)
 			`;
 		} catch (err) {
@@ -998,7 +1013,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 	async readLetters(): Promise<Letter[]> {
 		try {
 			const rows = await this.sql`
-				SELECT id, from_context, to_context, content, timestamp, read, charges
+				SELECT id, from_context, to_context, content, timestamp, read, charges, letter_type
 				FROM letters
 				WHERE tenant_id = ${this.tenant}
 				ORDER BY timestamp ASC
@@ -1016,15 +1031,16 @@ export class PostgresBrainStorage implements IBrainStorage {
 				await sql`DELETE FROM letters WHERE tenant_id = ${this.tenant}`;
 				for (const letter of letters) {
 					await sql`
-						INSERT INTO letters (id, tenant_id, from_context, to_context, content, timestamp, read, charges)
+						INSERT INTO letters (id, tenant_id, from_context, to_context, content, timestamp, read, charges, letter_type)
 						VALUES (
 							${letter.id}, ${this.tenant}, ${letter.from_context}, ${letter.to_context},
 							${letter.content}, ${letter.timestamp}, ${letter.read},
-							${letter.charges ?? null}
+							${letter.charges ?? null}, ${letter.letter_type ?? null}
 						)
 						ON CONFLICT (id) DO UPDATE SET
 							read = EXCLUDED.read,
-							charges = EXCLUDED.charges
+							charges = EXCLUDED.charges,
+							letter_type = EXCLUDED.letter_type
 					`;
 				}
 			});
@@ -1045,15 +1061,16 @@ export class PostgresBrainStorage implements IBrainStorage {
 
 	private async _insertLetter(letter: Letter): Promise<void> {
 		await this.sql`
-			INSERT INTO letters (id, tenant_id, from_context, to_context, content, timestamp, read, charges)
+			INSERT INTO letters (id, tenant_id, from_context, to_context, content, timestamp, read, charges, letter_type)
 			VALUES (
 				${letter.id}, ${this.tenant}, ${letter.from_context}, ${letter.to_context},
 				${letter.content}, ${letter.timestamp}, ${letter.read},
-				${letter.charges ?? null}
+				${letter.charges ?? null}, ${letter.letter_type ?? null}
 			)
 			ON CONFLICT (id) DO UPDATE SET
 				read = EXCLUDED.read,
-				charges = EXCLUDED.charges
+				charges = EXCLUDED.charges,
+				letter_type = EXCLUDED.letter_type
 		`;
 	}
 
@@ -2034,7 +2051,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 		return results.slice(0, limit);
 	}
 
-	async recordCoSurfacing(observationIds: string[]): Promise<void> {
+	async recordMemoryCascade(observationIds: string[]): Promise<void> {
 		// Only process top 5; generate all unique pairs with canonical ordering (id_a < id_b).
 		const top = observationIds.slice(0, 5);
 		if (top.length < 2) return;
@@ -2056,15 +2073,15 @@ export class PostgresBrainStorage implements IBrainStorage {
 		try {
 			// Single unnest INSERT — one subrequest for all pairs instead of N.
 			await this.sql`
-				INSERT INTO co_surfacing (tenant_id, obs_id_a, obs_id_b, count, last_co_surfaced)
+				INSERT INTO memory_cascade (tenant_id, obs_id_a, obs_id_b, count, last_co_surfaced)
 				SELECT ${this.tenant}, a, b, 1, NOW()
 				FROM unnest(${idsA}::text[], ${idsB}::text[]) AS t(a, b)
 				ON CONFLICT (tenant_id, obs_id_a, obs_id_b)
-				DO UPDATE SET count = co_surfacing.count + 1, last_co_surfaced = NOW()
+				DO UPDATE SET count = memory_cascade.count + 1, last_co_surfaced = NOW()
 			`;
 		} catch (err) {
-			// Co-surfacing is best-effort — never fail the search for this.
-			console.error("recordCoSurfacing failed:", err instanceof Error ? err.message : "unknown error");
+			// Cascade recording is best-effort — never fail the search for this.
+			console.error("recordMemoryCascade failed:", err instanceof Error ? err.message : "unknown error");
 		}
 	}
 
@@ -2373,12 +2390,12 @@ export class PostgresBrainStorage implements IBrainStorage {
 		}
 	}
 
-	async getTopCoSurfacingPairs(limit?: number): Promise<Array<{ obs_id_a: string; obs_id_b: string; count: number }>> {
+	async getTopCascadePairs(limit?: number): Promise<Array<{ obs_id_a: string; obs_id_b: string; count: number }>> {
 		const cap = Math.min(limit ?? 20, 100);
 		try {
 			const rows = await this.sql`
 				SELECT obs_id_a, obs_id_b, count
-				FROM co_surfacing
+				FROM memory_cascade
 				WHERE tenant_id = ${this.tenant}
 				ORDER BY count DESC
 				LIMIT ${cap}
@@ -2389,7 +2406,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 				count: r.count as number
 			}));
 		} catch (err) {
-			console.error("getTopCoSurfacingPairs failed:", err instanceof Error ? err.message : "unknown error");
+			console.error("getTopCascadePairs failed:", err instanceof Error ? err.message : "unknown error");
 			return [];
 		}
 	}
@@ -2475,13 +2492,426 @@ export class PostgresBrainStorage implements IBrainStorage {
 		}
 	}
 
+	// ============ OBSERVATION VERSIONS (Sprint 6) ============
+
+	async createVersion(observationId: string, content: string, texture: Observation["texture"], changeReason?: string): Promise<ObservationVersion> {
+		const id = generateId("ver");
+		try {
+			const rows = await this.sql`
+				INSERT INTO observation_versions (id, tenant_id, observation_id, version_num, content, texture, change_reason, created_at)
+				SELECT
+					${id},
+					${this.tenant},
+					${observationId},
+					COALESCE(MAX(version_num), 0) + 1,
+					${content},
+					${JSON.stringify(texture ?? {})},
+					${changeReason ?? null},
+					NOW()
+				FROM observation_versions
+				WHERE tenant_id = ${this.tenant}
+				  AND observation_id = ${observationId}
+				RETURNING *
+			`;
+			return this._rowToVersion(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("createVersion failed:", err instanceof Error ? err.message : "unknown error");
+			throw new Error("Failed to create observation version");
+		}
+	}
+
+	async getVersionHistory(observationId: string): Promise<ObservationVersion[]> {
+		try {
+			const rows = await this.sql`
+				SELECT * FROM observation_versions
+				WHERE tenant_id = ${this.tenant}
+				  AND observation_id = ${observationId}
+				ORDER BY version_num ASC
+			`;
+			return rows.map(r => this._rowToVersion(r as Record<string, unknown>));
+		} catch (err) {
+			console.error("getVersionHistory failed:", err instanceof Error ? err.message : "unknown error");
+			return [];
+		}
+	}
+
+	// ============ PROCESSING LOG (Sprint 6) ============
+
+	async createProcessingEntry(entry: Omit<ProcessingEntry, 'id' | 'tenant_id' | 'created_at'>): Promise<ProcessingEntry> {
+		const id = generateId("proc");
+		try {
+			const rows = await this.sql`
+				INSERT INTO processing_log (id, tenant_id, observation_id, processing_note, charge_at_processing, somatic_at_processing, created_at)
+				VALUES (
+					${id},
+					${this.tenant},
+					${entry.observation_id},
+					${entry.processing_note ?? null},
+					${entry.charge_at_processing ?? []},
+					${entry.somatic_at_processing ?? null},
+					NOW()
+				)
+				RETURNING *
+			`;
+			return this._rowToProcessingEntry(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("createProcessingEntry failed:", err instanceof Error ? err.message : "unknown error");
+			throw new Error("Failed to create processing entry");
+		}
+	}
+
+	async listProcessingEntries(observationId: string, limit?: number): Promise<ProcessingEntry[]> {
+		const cap = Math.min(limit ?? 20, 100);
+		try {
+			const rows = await this.sql`
+				SELECT * FROM processing_log
+				WHERE tenant_id = ${this.tenant}
+				  AND observation_id = ${observationId}
+				ORDER BY created_at DESC
+				LIMIT ${cap}
+			`;
+			return rows.map(r => this._rowToProcessingEntry(r as Record<string, unknown>));
+		} catch (err) {
+			console.error("listProcessingEntries failed:", err instanceof Error ? err.message : "unknown error");
+			return [];
+		}
+	}
+
+	async incrementProcessingCount(observationId: string): Promise<number> {
+		try {
+			const rows = await this.sql`
+				UPDATE observations
+				SET processing_count = processing_count + 1
+				WHERE tenant_id = ${this.tenant}
+				  AND id = ${observationId}
+				RETURNING processing_count
+			`;
+			return (rows[0]?.processing_count as number) ?? 0;
+		} catch (err) {
+			console.error("incrementProcessingCount failed:", err instanceof Error ? err.message : "unknown error");
+			throw new Error("Failed to increment processing count");
+		}
+	}
+
+	async advanceChargePhase(observationId: string): Promise<{ advanced: boolean; new_phase?: string }> {
+		// Threshold: 3 processings per phase level to advance.
+		// Burning paradox acceleration: if this observation is linked to a burning paradox loop,
+		// threshold drops to 2 processings per phase level.
+		const PHASE_ORDER: Array<string> = ['fresh', 'active', 'processing', 'metabolized'];
+		try {
+			// Count processings and check for burning paradox link in parallel.
+			const [countRows, paradoxRows] = await Promise.all([
+				this.sql`
+					SELECT COUNT(*)::int AS count
+					FROM processing_log
+					WHERE tenant_id = ${this.tenant}
+					  AND observation_id = ${observationId}
+				`,
+				// A burning paradox loop references this observation if the observation's entity_id
+				// appears in linked_entity_ids, OR if the observation is linked to an entity that
+				// appears in an open paradox loop. Simpler: check if any burning paradox loop exists
+				// whose linked observations or entity overlaps. We use the open_loops table directly:
+				// if any burning paradox loop has this observation's id in its content scope, we lower threshold.
+				// Practical approach: check if observation is linked to any entity that appears in a
+				// burning paradox loop's linked_entity_ids. Also check observation's own entity_id.
+				this.sql`
+					SELECT COUNT(*)::int AS count
+					FROM open_loops ol
+					JOIN observations obs ON obs.id = ${observationId}
+					WHERE ol.tenant_id = ${this.tenant}
+					  AND ol.mode = 'paradox'
+					  AND ol.status = 'burning'
+					  AND (
+					    (obs.entity_id IS NOT NULL AND ol.linked_entity_ids @> ARRAY[obs.entity_id])
+					  )
+				`
+			]);
+
+			const processingCount = (countRows[0]?.count as number) ?? 0;
+			const linkedToBurningParadox = ((paradoxRows[0]?.count as number) ?? 0) > 0;
+
+			// Base threshold per phase level: 3. Burning paradox: 2.
+			const baseThreshold = linkedToBurningParadox ? 2 : 3;
+
+			// Need at least baseThreshold processings to advance at all
+			if (processingCount < baseThreshold) return { advanced: false };
+
+			const obsRows = await this.sql`
+				SELECT texture FROM observations
+				WHERE tenant_id = ${this.tenant}
+				  AND id = ${observationId}
+				LIMIT 1
+			`;
+			if (!obsRows.length) return { advanced: false };
+
+			const texture = obsRows[0].texture as Record<string, unknown>;
+			const currentPhase = (texture?.charge_phase as string) ?? 'fresh';
+			const currentIdx = PHASE_ORDER.indexOf(currentPhase);
+
+			// Already at end or unrecognized phase
+			if (currentIdx < 0 || currentIdx >= PHASE_ORDER.length - 1) return { advanced: false };
+
+			// Flat threshold per phase: every phase advance needs exactly baseThreshold processings.
+			const threshold = baseThreshold;
+			if (processingCount < threshold) return { advanced: false };
+
+			const newPhase = PHASE_ORDER[currentIdx + 1];
+			await this.sql`
+				UPDATE observations
+				SET texture = jsonb_set(texture, '{charge_phase}', ${JSON.stringify(newPhase)})
+				WHERE tenant_id = ${this.tenant}
+				  AND id = ${observationId}
+			`;
+			return { advanced: true, new_phase: newPhase };
+		} catch (err) {
+			console.error("advanceChargePhase failed:", err instanceof Error ? err.message : "unknown error");
+			return { advanced: false };
+		}
+	}
+
+	// ============ CONSOLIDATION CANDIDATES (Sprint 6) ============
+
+	async createConsolidationCandidate(candidate: Omit<ConsolidationCandidate, 'id' | 'tenant_id' | 'created_at' | 'reviewed_at'>): Promise<ConsolidationCandidate> {
+		const id = generateId("cand");
+		try {
+			const rows = await this.sql`
+				INSERT INTO consolidation_candidates (
+					id, tenant_id, source_observation_ids, pattern_description,
+					suggested_territory, suggested_type, status, created_at
+				) VALUES (
+					${id},
+					${this.tenant},
+					${candidate.source_observation_ids},
+					${candidate.pattern_description},
+					${candidate.suggested_territory ?? null},
+					${candidate.suggested_type},
+					${candidate.status ?? 'pending'},
+					NOW()
+				)
+				RETURNING *
+			`;
+			return this._rowToConsolidationCandidate(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("createConsolidationCandidate failed:", err instanceof Error ? err.message : "unknown error");
+			throw new Error("Failed to create consolidation candidate");
+		}
+	}
+
+	async listConsolidationCandidates(status?: string, limit?: number): Promise<ConsolidationCandidate[]> {
+		const cap = Math.min(limit ?? 50, 200);
+		try {
+			const rows = await this.sql`
+				SELECT * FROM consolidation_candidates
+				WHERE tenant_id = ${this.tenant}
+				  AND (${status ?? null}::text IS NULL OR status = ${status ?? null})
+				ORDER BY created_at DESC
+				LIMIT ${cap}
+			`;
+			return rows.map(r => this._rowToConsolidationCandidate(r as Record<string, unknown>));
+		} catch (err) {
+			console.error("listConsolidationCandidates failed:", err instanceof Error ? err.message : "unknown error");
+			return [];
+		}
+	}
+
+	async reviewConsolidationCandidate(id: string, status: 'accepted' | 'rejected' | 'deferred'): Promise<ConsolidationCandidate> {
+		try {
+			const rows = await this.sql`
+				UPDATE consolidation_candidates
+				SET status = ${status},
+				    reviewed_at = NOW()
+				WHERE id = ${id}
+				  AND tenant_id = ${this.tenant}
+				RETURNING *
+			`;
+			if (!rows.length) throw new Error("Consolidation candidate not found");
+			return this._rowToConsolidationCandidate(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("reviewConsolidationCandidate failed:", err instanceof Error ? err.message : "unknown error");
+			throw new Error("Failed to review consolidation candidate");
+		}
+	}
+
+	// ============ DISPATCH FEEDBACK (Sprint 6) ============
+
+	async recordDispatch(entry: Omit<DispatchFeedback, 'id' | 'tenant_id' | 'dispatched_at'>): Promise<DispatchFeedback> {
+		const id = generateId("disp");
+		try {
+			const rows = await this.sql`
+				INSERT INTO dispatch_feedback (
+					id, tenant_id, agent_entity_id, task_type, dispatched_at,
+					outcome, findings_count, findings_acted, confidence_avg, notes, reviewed_at
+				) VALUES (
+					${id},
+					${this.tenant},
+					${entry.agent_entity_id ?? null},
+					${entry.task_type},
+					NOW(),
+					${entry.outcome ?? null},
+					${entry.findings_count ?? 0},
+					${entry.findings_acted ?? 0},
+					${entry.confidence_avg ?? null},
+					${entry.notes ?? null},
+					${entry.reviewed_at ?? null}
+				)
+				RETURNING *
+			`;
+			return this._rowToDispatchFeedback(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("recordDispatch failed:", err instanceof Error ? err.message : "unknown error");
+			throw new Error("Failed to record dispatch feedback");
+		}
+	}
+
+	async getDispatchStats(agentEntityId?: string): Promise<DispatchStat[]> {
+		try {
+			const rows = await this.sql`
+				SELECT
+					task_type,
+					COUNT(*)::int                                                     AS total,
+					COUNT(*) FILTER (WHERE outcome = 'effective')::int               AS effective,
+					COUNT(*) FILTER (WHERE outcome = 'partial')::int                 AS partial,
+					COUNT(*) FILTER (WHERE outcome = 'ineffective')::int             AS ineffective,
+					COUNT(*) FILTER (WHERE outcome = 'redirected')::int              AS redirected,
+					COALESCE(AVG(confidence_avg), 0)::real                           AS avg_confidence
+				FROM dispatch_feedback
+				WHERE tenant_id = ${this.tenant}
+				  AND (${agentEntityId ?? null}::text IS NULL OR agent_entity_id = ${agentEntityId ?? null})
+				GROUP BY task_type
+				ORDER BY total DESC
+			`;
+			return rows.map(r => ({
+				task_type: r.task_type as string,
+				total: r.total as number,
+				effective: r.effective as number,
+				partial: r.partial as number,
+				ineffective: r.ineffective as number,
+				redirected: r.redirected as number,
+				avg_confidence: r.avg_confidence as number
+			}));
+		} catch (err) {
+			console.error("getDispatchStats failed:", err instanceof Error ? err.message : "unknown error");
+			return [];
+		}
+	}
+
+	// ============ TASKS (Sprint 6 schema — Sprint 7 wiring) ============
+
+	async createTask(task: Omit<Task, 'id' | 'tenant_id' | 'created_at' | 'updated_at'>): Promise<Task> {
+		const id = generateId("task");
+		try {
+			const rows = await this.sql`
+				INSERT INTO tasks (
+					id, tenant_id, assigned_tenant, title, description, status, priority,
+					estimated_effort, scheduled_wake, source,
+					linked_observation_ids, linked_entity_ids, depends_on,
+					completion_note, created_at, updated_at, completed_at
+				) VALUES (
+					${id},
+					${this.tenant},
+					${task.assigned_tenant ?? null},
+					${task.title},
+					${task.description ?? null},
+					${task.status ?? 'open'},
+					${task.priority ?? 'normal'},
+					${task.estimated_effort ?? null},
+					${task.scheduled_wake ?? null},
+					${task.source ?? null},
+					${task.linked_observation_ids ?? []},
+					${task.linked_entity_ids ?? []},
+					${task.depends_on ?? null},
+					${task.completion_note ?? null},
+					NOW(),
+					NOW(),
+					${task.completed_at ?? null}
+				)
+				RETURNING *
+			`;
+			return this._rowToTask(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("createTask failed:", err instanceof Error ? err.message : "unknown error");
+			throw new Error("Failed to create task");
+		}
+	}
+
+	async listTasks(status?: string, priority?: string, limit?: number): Promise<Task[]> {
+		const cap = Math.min(limit ?? 50, 200);
+		try {
+			const rows = await this.sql`
+				SELECT * FROM tasks
+				WHERE tenant_id = ${this.tenant}
+				  AND (${status ?? null}::text IS NULL OR status = ${status ?? null})
+				  AND (${priority ?? null}::text IS NULL OR priority = ${priority ?? null})
+				ORDER BY created_at DESC
+				LIMIT ${cap}
+			`;
+			return rows.map(r => this._rowToTask(r as Record<string, unknown>));
+		} catch (err) {
+			console.error("listTasks failed:", err instanceof Error ? err.message : "unknown error");
+			return [];
+		}
+	}
+
+	async updateTask(id: string, updates: Partial<Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'estimated_effort' | 'scheduled_wake' | 'completion_note' | 'completed_at'>>): Promise<Task> {
+		const current = await this.getTask(id);
+		if (!current) throw new Error("Task not found");
+
+		const title = updates.title ?? current.title;
+		const description = updates.description !== undefined ? updates.description : current.description;
+		const status = updates.status ?? current.status;
+		const priority = updates.priority ?? current.priority;
+		const estimated_effort = updates.estimated_effort !== undefined ? updates.estimated_effort : current.estimated_effort;
+		const scheduled_wake = updates.scheduled_wake !== undefined ? updates.scheduled_wake : current.scheduled_wake;
+		const completion_note = updates.completion_note !== undefined ? updates.completion_note : current.completion_note;
+		const completed_at = updates.completed_at !== undefined ? updates.completed_at : current.completed_at;
+
+		try {
+			const rows = await this.sql`
+				UPDATE tasks SET
+					title            = ${title},
+					description      = ${description ?? null},
+					status           = ${status},
+					priority         = ${priority},
+					estimated_effort = ${estimated_effort ?? null},
+					scheduled_wake   = ${scheduled_wake ?? null},
+					completion_note  = ${completion_note ?? null},
+					completed_at     = ${completed_at ?? null},
+					updated_at       = NOW()
+				WHERE id = ${id}
+				  AND tenant_id = ${this.tenant}
+				RETURNING *
+			`;
+			if (!rows.length) throw new Error("Task not found after update");
+			return this._rowToTask(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("updateTask failed:", err instanceof Error ? err.message : "unknown error");
+			throw new Error("Failed to update task");
+		}
+	}
+
+	async getTask(id: string): Promise<Task | null> {
+		try {
+			const rows = await this.sql`
+				SELECT * FROM tasks
+				WHERE id = ${id}
+				  AND tenant_id = ${this.tenant}
+				LIMIT 1
+			`;
+			if (!rows.length) return null;
+			return this._rowToTask(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("getTask failed:", err instanceof Error ? err.message : "unknown error");
+			return null;
+		}
+	}
+
 	// ============ ROW MAPPERS (Sprint 4) ============
 
 	private _rowToProposal(row: Record<string, unknown>): DaemonProposal {
 		return {
 			id: row.id as string,
 			tenant_id: row.tenant_id as string,
-			proposal_type: row.proposal_type as 'link' | 'orphan_rescue',
+			proposal_type: row.proposal_type as DaemonProposal['proposal_type'],
 			source_id: row.source_id as string,
 			target_id: row.target_id as string,
 			similarity: row.similarity as number | undefined,
@@ -2504,6 +2934,83 @@ export class PostgresBrainStorage implements IBrainStorage {
 			rescue_attempts: (row.rescue_attempts as number) ?? 0,
 			last_rescue_attempt: toISOString(row.last_rescue_attempt),
 			status: row.status as 'orphaned' | 'rescued' | 'archived'
+		};
+	}
+
+	private _rowToVersion(row: Record<string, unknown>): ObservationVersion {
+		return {
+			id: row.id as string,
+			tenant_id: row.tenant_id as string,
+			observation_id: row.observation_id as string,
+			version_num: row.version_num as number,
+			content: row.content as string,
+			texture: (row.texture ?? {}) as ObservationVersion["texture"],
+			change_reason: row.change_reason as string | undefined,
+			created_at: toISOString(row.created_at) || new Date().toISOString()
+		};
+	}
+
+	private _rowToProcessingEntry(row: Record<string, unknown>): ProcessingEntry {
+		return {
+			id: row.id as string,
+			tenant_id: row.tenant_id as string,
+			observation_id: row.observation_id as string,
+			processing_note: row.processing_note as string | undefined,
+			charge_at_processing: (row.charge_at_processing as string[] | null) ?? [],
+			somatic_at_processing: row.somatic_at_processing as string | undefined,
+			created_at: toISOString(row.created_at) || new Date().toISOString()
+		};
+	}
+
+	private _rowToConsolidationCandidate(row: Record<string, unknown>): ConsolidationCandidate {
+		return {
+			id: row.id as string,
+			tenant_id: row.tenant_id as string,
+			source_observation_ids: (row.source_observation_ids as string[] | null) ?? [],
+			pattern_description: row.pattern_description as string,
+			suggested_territory: row.suggested_territory as string | undefined,
+			suggested_type: row.suggested_type as 'skill' | 'identity' | 'synthesis',
+			status: row.status as 'pending' | 'accepted' | 'rejected' | 'deferred',
+			created_at: toISOString(row.created_at) || new Date().toISOString(),
+			reviewed_at: toISOString(row.reviewed_at)
+		};
+	}
+
+	private _rowToDispatchFeedback(row: Record<string, unknown>): DispatchFeedback {
+		return {
+			id: row.id as string,
+			tenant_id: row.tenant_id as string,
+			agent_entity_id: row.agent_entity_id as string | undefined,
+			task_type: row.task_type as string,
+			dispatched_at: toISOString(row.dispatched_at) || new Date().toISOString(),
+			outcome: row.outcome as DispatchFeedback["outcome"],
+			findings_count: (row.findings_count as number) ?? 0,
+			findings_acted: (row.findings_acted as number) ?? 0,
+			confidence_avg: row.confidence_avg as number | undefined,
+			notes: row.notes as string | undefined,
+			reviewed_at: toISOString(row.reviewed_at)
+		};
+	}
+
+	private _rowToTask(row: Record<string, unknown>): Task {
+		return {
+			id: row.id as string,
+			tenant_id: row.tenant_id as string,
+			assigned_tenant: row.assigned_tenant as string | undefined,
+			title: row.title as string,
+			description: row.description as string | undefined,
+			status: row.status as Task["status"],
+			priority: row.priority as Task["priority"],
+			estimated_effort: row.estimated_effort as string | undefined,
+			scheduled_wake: toISOString(row.scheduled_wake),
+			source: row.source as string | undefined,
+			linked_observation_ids: (row.linked_observation_ids as string[] | null) ?? [],
+			linked_entity_ids: (row.linked_entity_ids as string[] | null) ?? [],
+			depends_on: (row.depends_on as string[] | null) ?? undefined,
+			completion_note: row.completion_note as string | undefined,
+			created_at: toISOString(row.created_at) || new Date().toISOString(),
+			updated_at: toISOString(row.updated_at) || new Date().toISOString(),
+			completed_at: toISOString(row.completed_at)
 		};
 	}
 }

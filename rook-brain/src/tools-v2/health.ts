@@ -1,19 +1,19 @@
 // ============ HEALTH TOOL (v2) ============
 // mind_health — system health and daemon intelligence diagnostics.
-// section=all|proposals|orphans|embeddings|cosurfacing
+// section=all|proposals|orphans|embeddings|cascade
 
 import type { ToolContext } from "./context";
 
 export const TOOL_DEFS = [
 	{
 		name: "mind_health",
-		description: "Brain system health and daemon intelligence diagnostics. section=all: full snapshot. section=proposals: proposal stats + current threshold. section=orphans: orphan counts and age. section=embeddings: embedding coverage. section=cosurfacing: top co-surfacing observation pairs.",
+		description: "Brain system health and daemon intelligence diagnostics. section=all: full snapshot. section=proposals: proposal stats + current threshold. section=orphans: orphan counts and age. section=embeddings: embedding coverage. section=cascade: top memory cascade observation pairs.",
 		inputSchema: {
 			type: "object",
 			properties: {
 				section: {
 					type: "string",
-					enum: ["all", "proposals", "orphans", "embeddings", "cosurfacing"],
+					enum: ["all", "proposals", "orphans", "embeddings", "cascade"],
 					default: "all",
 					description: "Which section of health data to return"
 				}
@@ -34,7 +34,7 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 				proposals: section === "all" || section === "proposals",
 				orphans: section === "all" || section === "orphans",
 				embeddings: section === "all" || section === "embeddings",
-				cosurfacing: section === "all" || section === "cosurfacing"
+				cascade: section === "all" || section === "cascade"
 			};
 
 			const result: Record<string, unknown> = {};
@@ -86,10 +86,10 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 				);
 			}
 
-			if (include.cosurfacing) {
+			if (include.cascade) {
 				tasks.push(
-					storage.getTopCoSurfacingPairs(10).then(pairs => {
-						result.cosurfacing = {
+					storage.getTopCascadePairs(10).then(pairs => {
+						result.cascade = {
 							top_pairs: pairs
 						};
 					})

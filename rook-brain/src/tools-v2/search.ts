@@ -87,7 +87,7 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 				if (context.waitUntil) {
 					context.waitUntil(
 						Promise.all([
-							context.storage.recordCoSurfacing(returnedIds),
+							context.storage.recordMemoryCascade(returnedIds),
 							context.storage.updateSurfacingEffects(returnedIds)
 						]).catch(err => console.error("hybridSearch side effects failed:", err instanceof Error ? err.message : "unknown error"))
 					);

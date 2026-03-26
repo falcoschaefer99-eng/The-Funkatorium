@@ -17,6 +17,7 @@ import { TOOL_DEFS as searchDefs, handleTool as handleSearch } from "./search";
 import { TOOL_DEFS as entityDefs, handleTool as handleEntity } from "./entity";
 import { TOOL_DEFS as proposeDefs, handleTool as handlePropose } from "./propose";
 import { TOOL_DEFS as healthDefs, handleTool as handleHealth } from "./health";
+import { TOOL_DEFS as timelineDefs, handleTool as handleTimeline } from "./timeline";
 
 // ============ AGGREGATED TOOL DEFINITIONS ============
 
@@ -33,7 +34,8 @@ export const TOOL_DEFS = [
 	...searchDefs,
 	...entityDefs,
 	...proposeDefs,
-	...healthDefs
+	...healthDefs,
+	...timelineDefs
 ];
 
 // ============ TOOL DISPATCH TABLE ============
@@ -88,7 +90,10 @@ const TOOL_MODULES: Record<string, (name: string, args: any, context: ToolContex
 
 	// Daemon Intelligence (Sprint 4)
 	mind_propose: handlePropose,
-	mind_health: handleHealth
+	mind_health: handleHealth,
+
+	// Timeline (Sprint 6)
+	mind_timeline: handleTimeline
 };
 
 // ============ EXECUTE TOOL ============

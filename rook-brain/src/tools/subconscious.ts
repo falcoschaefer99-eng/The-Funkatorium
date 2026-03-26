@@ -166,7 +166,7 @@ export async function processSubconscious(
 	const state: SubconsciousState = {
 		last_processed: now,
 		hot_entities: hotEntities,
-		co_surfacing: coSurfacing,
+		memory_cascade: coSurfacing,
 		mood_inference: {
 			suggested_mood: suggestedMood,
 			confidence: Math.round(confidence * 100) / 100,

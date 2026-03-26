@@ -1,12 +1,12 @@
-// ============ DAEMON TASK: CO-SURFACING ============
+// ============ DAEMON TASK: MEMORY CASCADE ============
 // Detects charge-based co-occurrence among recent observations.
-// When two recent observations share 2+ charges, they are co-surfacing pairs.
+// When two recent observations share 2+ charges, they are memory cascade pairs.
 // Collects ALL pairs across all groups, then records in a single batch call.
 
 import type { IBrainStorage } from "../../storage/interface";
 import type { DaemonTaskResult } from "../types";
 
-export async function runCoSurfacingTask(storage: IBrainStorage): Promise<DaemonTaskResult> {
+export async function runCascadeTask(storage: IBrainStorage): Promise<DaemonTaskResult> {
 	// Query recent observations
 	const recentResults = await storage.queryObservations({
 		limit: 30,
@@ -21,10 +21,10 @@ export async function runCoSurfacingTask(storage: IBrainStorage): Promise<Daemon
 	});
 
 	if (recent.length < 2) {
-		return { task: "cosurfacing", changes: 0, proposals_created: 0 };
+		return { task: "cascade", changes: 0, proposals_created: 0 };
 	}
 
-	// Collect ALL co-surfacing pairs across all groups
+	// Collect ALL memory cascade pairs across all groups
 	const allPairIds: string[] = [];
 	const processed = new Set<string>();
 	let changes = 0;
@@ -61,12 +61,12 @@ export async function runCoSurfacingTask(storage: IBrainStorage): Promise<Daemon
 		}
 	}
 
-	// Single batch call for all co-surfacing pairs
+	// Single batch call for all memory cascade pairs
 	if (allPairIds.length >= 2) {
-		// Deduplicate: recordCoSurfacing handles pair generation internally
+		// Deduplicate: recordMemoryCascade handles pair generation internally
 		const uniqueIds = [...new Set(allPairIds)];
-		await storage.recordCoSurfacing(uniqueIds.slice(0, 20));
+		await storage.recordMemoryCascade(uniqueIds.slice(0, 20));
 	}
 
-	return { task: "cosurfacing", changes, proposals_created: 0 };
+	return { task: "cascade", changes, proposals_created: 0 };
 }

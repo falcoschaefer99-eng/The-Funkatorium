@@ -1,6 +1,6 @@
-// ============ DAEMON ORCHESTRATOR (Sprint 4) ============
+// ============ DAEMON ORCHESTRATOR (Sprint 4 + Sprint 6) ============
 // Runs all daemon intelligence tasks in order.
-// Execution order: proposals → learning → cosurfacing → orphans.
+// Execution order: proposals → learning → cascade → orphans → kit-hygiene → cross-agent → cross-tenant → paradox-detection.
 // Proposals first — it's the primary feature and uses the fewest subrequests.
 // Each task is isolated — failures don't cascade.
 
@@ -8,10 +8,14 @@ import type { IBrainStorage } from "../storage/interface";
 import type { IEmbeddingProvider } from "../embedding/interface";
 import type { DaemonTaskResult } from "./types";
 
-import { runCoSurfacingTask } from "./tasks/cosurfacing";
+import { runCascadeTask } from "./tasks/cascade";
 import { runOrphanTask } from "./tasks/orphans";
 import { runProposalTask } from "./tasks/proposals";
 import { runLearningTask } from "./tasks/learning";
+import { runKitHygieneTask } from "./tasks/kit-hygiene";
+import { runCrossAgentTask } from "./tasks/cross-agent";
+import { runCrossTenantTask } from "./tasks/cross-tenant";
+import { runParadoxDetectionTask } from "./tasks/paradox-detection";
 
 export async function runDaemonTasks(
 	storage: IBrainStorage,
@@ -45,13 +49,13 @@ export async function runDaemonTasks(
 		});
 	}
 
-	// 3. Co-surfacing — record charge-based co-occurrence pairs
+	// 3. Memory cascade — record charge-based co-occurrence pairs
 	try {
-		const result = await runCoSurfacingTask(storage);
+		const result = await runCascadeTask(storage);
 		results.push(result);
 	} catch (err) {
 		results.push({
-			task: "cosurfacing",
+			task: "cascade",
 			changes: 0,
 			proposals_created: 0,
 			error: err instanceof Error ? err.message : "unknown error"
@@ -65,6 +69,58 @@ export async function runDaemonTasks(
 	} catch (err) {
 		results.push({
 			task: "orphans",
+			changes: 0,
+			proposals_created: 0,
+			error: err instanceof Error ? err.message : "unknown error"
+		});
+	}
+
+	// 5. Kit hygiene — per-agent consolidation and dedup proposals
+	try {
+		const result = await runKitHygieneTask(storage);
+		results.push(result);
+	} catch (err) {
+		results.push({
+			task: "kit-hygiene",
+			changes: 0,
+			proposals_created: 0,
+			error: err instanceof Error ? err.message : "unknown error"
+		});
+	}
+
+	// 6. Cross-agent synthesis — convergent findings across different agent entities
+	try {
+		const result = await runCrossAgentTask(storage);
+		results.push(result);
+	} catch (err) {
+		results.push({
+			task: "cross-agent",
+			changes: 0,
+			proposals_created: 0,
+			error: err instanceof Error ? err.message : "unknown error"
+		});
+	}
+
+	// 7. Cross-tenant proposals — shared territory convergence (craft, philosophy only)
+	try {
+		const result = await runCrossTenantTask(storage);
+		results.push(result);
+	} catch (err) {
+		results.push({
+			task: "cross-tenant",
+			changes: 0,
+			proposals_created: 0,
+			error: err instanceof Error ? err.message : "unknown error"
+		});
+	}
+
+	// 8. Paradox detection — identity cores challenged 3+ times without a paradox loop
+	try {
+		const result = await runParadoxDetectionTask(storage);
+		results.push(result);
+	} catch (err) {
+		results.push({
+			task: "paradox-detection",
 			changes: 0,
 			proposals_created: 0,
 			error: err instanceof Error ? err.message : "unknown error"

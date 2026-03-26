@@ -46,7 +46,7 @@ export const TOOL_DEFS = [
 	},
 	{
 		name: "mind_subconscious",
-		description: "Subconscious state. action=process: compute hot entities, co-surfacing patterns, mood inference, orphans from recent observations. action=patterns: view pre-computed subconscious state.",
+		description: "Subconscious state. action=process: compute hot entities, memory cascade patterns, mood inference, orphans from recent observations. action=patterns: view pre-computed subconscious state.",
 		inputSchema: {
 			type: "object",
 			properties: {
@@ -416,7 +416,7 @@ ${fragments[0]}
 				if (!subconscious) {
 					return {
 						note: "Subconscious hasn't run yet. It processes on a 5-minute daemon cycle.",
-						hint: "The daemon detects hot entities, co-surfacing patterns, mood inference, and orphan memories. Use action=process to compute now."
+						hint: "The daemon detects hot entities, memory cascade patterns, mood inference, and orphan memories. Use action=process to compute now."
 					};
 				}
 				return { ...subconscious, hint: "This was pre-computed. Use action=process to recompute." };
@@ -474,7 +474,7 @@ ${fragments[0]}
 					.slice(0, 5)
 					.map(([entity, data]) => ({ entity, mention_count: data.count, recent_charges: [...new Set(data.charges)].slice(0, 5) }));
 
-				const coSurfacing = Object.entries(pairCounts)
+				const memoryCascade = Object.entries(pairCounts)
 					.sort((a, b) => b[1] - a[1])
 					.slice(0, 5)
 					.map(([pair, count]) => ({ pair: pair.split("|") as [string, string], count }));
@@ -515,7 +515,7 @@ ${fragments[0]}
 				const state: SubconsciousState = {
 					last_processed: now,
 					hot_entities: hotEntities,
-					co_surfacing: coSurfacing,
+					memory_cascade: memoryCascade,
 					mood_inference: {
 						suggested_mood: suggestedMood,
 						confidence: Math.round(confidence * 100) / 100,

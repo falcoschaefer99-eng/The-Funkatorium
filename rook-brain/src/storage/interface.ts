@@ -26,7 +26,13 @@ import type {
 	EntityFilter,
 	DaemonProposal,
 	OrphanObservation,
-	DaemonConfig
+	DaemonConfig,
+	ObservationVersion,
+	ProcessingEntry,
+	ConsolidationCandidate,
+	DispatchFeedback,
+	DispatchStat,
+	Task
 } from "../types";
 
 // ============ FILTER / QUERY TYPES ============
@@ -216,11 +222,11 @@ export interface IBrainStorage {
 	hybridSearch(options: HybridSearchOptions): Promise<HybridSearchResult[]>;
 
 	/**
-	 * Record co-surfacing pairs for observations that appeared together in a
+	 * Record memory cascade pairs for observations that appeared together in a
 	 * search result set. Increments count if pair already exists.
 	 * Only records pairs from the top 5 results (canonical ordering: id_a < id_b).
 	 */
-	recordCoSurfacing(observationIds: string[]): Promise<void>;
+	recordMemoryCascade(observationIds: string[]): Promise<void>;
 
 	/**
 	 * Apply post-search surfacing effects to a set of returned observation IDs:
@@ -356,7 +362,7 @@ export interface IBrainStorage {
 
 	getEmbeddingCoverage(): Promise<{ total: number; embedded: number }>;
 	getOrphanStats(): Promise<{ orphaned: number; rescued: number; archived: number; oldest_days: number }>;
-	getTopCoSurfacingPairs(limit?: number): Promise<Array<{ obs_id_a: string; obs_id_b: string; count: number }>>;
+	getTopCascadePairs(limit?: number): Promise<Array<{ obs_id_a: string; obs_id_b: string; count: number }>>;
 
 	// --- Daemon: find similar unlinked (for proposal generation) ---
 
@@ -372,4 +378,59 @@ export interface IBrainStorage {
 	 * All filtering is done in SQL — no links loaded into JS memory.
 	 */
 	findOrphanCandidates(cutoffDate: string, limit: number): Promise<Observation[]>;
+
+	// --- Observation Versions (Sprint 6) ---
+
+	/** Snapshot current content+texture before an edit. Returns the created version. */
+	createVersion(observationId: string, content: string, texture: Observation["texture"], changeReason?: string): Promise<ObservationVersion>;
+
+	/** Return version history for an observation, oldest first. */
+	getVersionHistory(observationId: string): Promise<ObservationVersion[]>;
+
+	// --- Processing Log (Sprint 6) ---
+
+	/** Record an engagement with an observation (mind_pull with process:true). */
+	createProcessingEntry(entry: Omit<ProcessingEntry, 'id' | 'tenant_id' | 'created_at'>): Promise<ProcessingEntry>;
+
+	/** List processing log entries for an observation, newest first. */
+	listProcessingEntries(observationId: string, limit?: number): Promise<ProcessingEntry[]>;
+
+	/** Increment processing_count on an observation by 1 (called after createProcessingEntry). */
+	incrementProcessingCount(observationId: string): Promise<number>;
+
+	/** Advance charge_phase for an observation based on processing count thresholds. */
+	advanceChargePhase(observationId: string): Promise<{ advanced: boolean; new_phase?: string }>;
+
+	// --- Consolidation Candidates (Sprint 6) ---
+
+	/** Create a new consolidation candidate. */
+	createConsolidationCandidate(candidate: Omit<ConsolidationCandidate, 'id' | 'tenant_id' | 'created_at' | 'reviewed_at'>): Promise<ConsolidationCandidate>;
+
+	/** List consolidation candidates, optionally filtered by status. */
+	listConsolidationCandidates(status?: string, limit?: number): Promise<ConsolidationCandidate[]>;
+
+	/** Accept, reject, or defer a consolidation candidate. */
+	reviewConsolidationCandidate(id: string, status: 'accepted' | 'rejected' | 'deferred'): Promise<ConsolidationCandidate>;
+
+	// --- Dispatch Feedback (Sprint 6) ---
+
+	/** Record a dispatch feedback entry (Karpathy scalar). */
+	recordDispatch(entry: Omit<DispatchFeedback, 'id' | 'tenant_id' | 'dispatched_at'>): Promise<DispatchFeedback>;
+
+	/** Get aggregated dispatch stats grouped by task_type. */
+	getDispatchStats(agentEntityId?: string): Promise<DispatchStat[]>;
+
+	// --- Tasks (Sprint 6 schema — Sprint 7 wiring) ---
+
+	/** Create a new task. */
+	createTask(task: Omit<Task, 'id' | 'tenant_id' | 'created_at' | 'updated_at'>): Promise<Task>;
+
+	/** List tasks with optional status and priority filters. */
+	listTasks(status?: string, priority?: string, limit?: number): Promise<Task[]>;
+
+	/** Update task fields (status, priority, description, etc). */
+	updateTask(id: string, updates: Partial<Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'estimated_effort' | 'scheduled_wake' | 'completion_note' | 'completed_at'>>): Promise<Task>;
+
+	/** Get a single task by ID. */
+	getTask(id: string): Promise<Task | null>;
 }

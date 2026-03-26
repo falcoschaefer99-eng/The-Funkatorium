@@ -4,17 +4,18 @@
 // action=review: accept or reject. Accept + link → create bidirectional link.
 //   Accept + orphan_rescue + archive → metabolize + update orphan status.
 //   Accept + orphan_rescue (rescue) → create link + update orphan status.
+//   Accept + consolidation → create skill observation, metabolize sources, accept candidate.
 // action=stats: return proposal statistics
 
 import { generateId, getTimestamp } from "../helpers";
 import { RESONANCE_TYPES } from "../constants";
-import type { Link } from "../types";
+import type { Link, Observation } from "../types";
 import type { ToolContext } from "./context";
 
 export const TOOL_DEFS = [
 	{
 		name: "mind_propose",
-		description: "Review and manage daemon-generated link and orphan rescue proposals. action=list: see pending proposals. action=review: accept or reject a proposal (accepted link proposals create bidirectional links; accepted orphan_rescue proposals with action=archive metabolize the observation). action=stats: proposal acceptance statistics.",
+		description: "Review and manage daemon-generated proposals. action=list: see pending proposals (types: link, orphan_rescue, consolidation, dedup, cross_agent, cross_tenant, paradox_detected). action=review: accept or reject a proposal (link → bidirectional link; orphan_rescue → rescue or archive; consolidation → skill observation + metabolize sources). action=stats: acceptance statistics.",
 		inputSchema: {
 			type: "object",
 			properties: {
@@ -26,7 +27,7 @@ export const TOOL_DEFS = [
 				// list params
 				type: {
 					type: "string",
-					enum: ["link", "orphan_rescue"],
+					enum: ["link", "orphan_rescue", "consolidation", "dedup", "cross_agent", "cross_tenant", "paradox_detected"],
 					description: "[list] Filter by proposal type"
 				},
 				status: {
@@ -231,6 +232,84 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 								link_ids: [fwdLink.id, revLink.id]
 							};
 						}
+					}
+
+					// --- consolidation proposal: create skill obs, metabolize sources ---
+					if (proposal.proposal_type === "consolidation") {
+						const meta = proposal.metadata as Record<string, unknown>;
+						const agentId = meta.agent_id as string | undefined;
+
+						// Find pending consolidation candidates linked to this agent
+						const candidates = await storage.listConsolidationCandidates("pending", 10);
+						const agentCandidates = agentId
+							? candidates.filter(c => {
+								// Candidates created by kit-hygiene store agent obs IDs.
+								// Cross-agent candidates store obs from multiple agents.
+								// We match on any candidate whose pattern_description mentions the agent.
+								return c.pattern_description.includes(agentId) || c.pattern_description.includes(meta.agent_name as string ?? "");
+							})
+							: candidates;
+
+						const candidate = agentCandidates[0]; // Take the first matching candidate
+						let sourceObsIds: string[] = [];
+						let candidateId: string | undefined;
+
+						if (candidate) {
+							sourceObsIds = candidate.source_observation_ids;
+							candidateId = candidate.id;
+							await storage.reviewConsolidationCandidate(candidate.id, "accepted");
+						}
+
+						// Mark source observations as metabolized
+						const metabolized: string[] = [];
+						for (const obsId of sourceObsIds) {
+							const found = await storage.findObservation(obsId);
+							if (found) {
+								const texture = { ...found.observation.texture, charge_phase: "metabolized" as const };
+								await storage.updateObservationTexture(obsId, texture);
+								metabolized.push(obsId);
+							}
+						}
+
+						// Create skill observation for the agent
+						const now = getTimestamp();
+						const agentName = (meta.agent_name as string) ?? "unknown agent";
+						const skillObs: Observation = {
+							id: generateId("obs"),
+							content: `Skill distilled from ${metabolized.length} observations by ${agentName}. Pattern: ${candidate?.pattern_description ?? proposal.rationale ?? "consolidation"}`,
+							territory: "craft",
+							created: now,
+							texture: {
+								salience: "active",
+								vividness: "vivid",
+								charge: [],
+								grip: "present",
+								charge_phase: "fresh"
+							},
+							access_count: 0,
+							type: "skill",
+							...(agentId ? { entity_id: agentId } : {})
+						};
+
+						await storage.appendToTerritory("craft", skillObs);
+
+						// Update the agent entity's primary_context if we have an agent ID
+						if (agentId) {
+							await storage.updateEntity(agentId, {
+								primary_context: `Last skill distilled: ${now.slice(0, 10)} (${metabolized.length} observations consolidated)`
+							});
+						}
+
+						return {
+							reviewed: true,
+							decision: "accepted",
+							proposal_id: reviewed.id,
+							action_taken: "created_skill_observation",
+							skill_observation_id: skillObs.id,
+							metabolized_count: metabolized.length,
+							metabolized_ids: metabolized,
+							candidate_id: candidateId
+						};
 					}
 				}
 

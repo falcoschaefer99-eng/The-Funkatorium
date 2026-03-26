@@ -1,5 +1,5 @@
 // ============ CONNECTIONS TOOLS (v2) ============
-// mind_link (action: create/trace/chain), mind_loop (action: open/list/resolve)
+// mind_link (action: create/trace/chain), mind_loop (action: open/list/resolve/paradox/resolve)
 
 import type { Link, Observation, OpenLoop } from "../types";
 import { TERRITORIES, RESONANCE_TYPES, LINK_STRENGTHS, LOOP_STATUSES } from "../constants";
@@ -36,22 +36,27 @@ export const TOOL_DEFS = [
 	},
 	{
 		name: "mind_loop",
-		description: "Open loop (Zeigarnik) management. action=open: create an open loop. action=list: see all active loops by urgency. action=resolve: close an open loop.",
+		description: "Open loop (Zeigarnik) management. action=open: create a standard open loop. action=paradox: create a paradox loop — two identity cores in productive friction (mode=paradox, linked_entity_ids). action=list: see all active loops by urgency. action=resolve: close any loop with resolution note and optional synthesis observation.",
 		inputSchema: {
 			type: "object",
 			properties: {
 				action: {
 					type: "string",
-					enum: ["open", "list", "resolve"],
-					description: "open: create open loop. list: view active loops. resolve: close a loop."
+					enum: ["open", "paradox", "list", "resolve"],
+					description: "open: create open loop. paradox: create paradox loop with linked identity cores. list: view active loops. resolve: close a loop."
 				},
-				// open params
-				content: { type: "string", description: "[open] What's unfinished" },
-				territory: { type: "string", enum: Object.keys(TERRITORIES), default: "self", description: "[open] Territory this loop belongs to" },
-				status: { type: "string", enum: LOOP_STATUSES, default: "nagging", description: "[open] Initial urgency" },
+				// open + paradox shared params
+				content: { type: "string", description: "[open/paradox] What's unfinished or the paradox description (e.g. 'vision vs pragmatism')" },
+				territory: { type: "string", enum: Object.keys(TERRITORIES), default: "self", description: "[open/paradox] Territory this loop belongs to" },
+				status: { type: "string", enum: LOOP_STATUSES, default: "nagging", description: "[open] Initial urgency. Defaults to 'burning' for paradox action." },
+				// open: optional mode for learning_objective loops
+				mode: { type: "string", enum: ["standard", "learning_objective"], description: "[open] Loop mode. Defaults to standard." },
+				// paradox params
+				linked_entity_ids: { type: "array", items: { type: "string" }, description: "[paradox] Entity IDs of the identity cores in friction (typically 2)" },
 				// resolve params
-				loop_id: { type: "string", description: "[resolve] ID of the loop to resolve" },
-				resolution_note: { type: "string", description: "[resolve] How it was resolved" }
+				id: { type: "string", description: "[resolve] ID of the loop to resolve" },
+				resolution_note: { type: "string", description: "[resolve] How it was resolved or integrated" },
+				create_synthesis: { type: "boolean", default: false, description: "[resolve] If true, create a new observation from the resolution note as a synthesis" }
 			},
 			required: ["action"]
 		}
@@ -227,16 +232,54 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 			if (action === "open") {
 				if (!args.content) return { error: "content is required for action=open" };
 
+				// Validate mode if provided
+				const loopMode = args.mode ?? 'standard';
+				if (!['standard', 'learning_objective'].includes(loopMode)) {
+					return { error: "mode must be standard or learning_objective for action=open. Use action=paradox to create paradox loops." };
+				}
+
 				const loop: OpenLoop = {
 					id: generateId("loop"),
 					content: args.content,
 					status: args.status || "nagging",
 					territory: storage.validateTerritory(args.territory || "self"),
-					created: getTimestamp()
+					created: getTimestamp(),
+					mode: loopMode as OpenLoop['mode']
 				};
 
 				await storage.appendOpenLoop(loop);
-				return { created: true, id: loop.id, status: loop.status };
+				return { created: true, id: loop.id, status: loop.status, mode: loop.mode };
+			}
+
+			if (action === "paradox") {
+				if (!args.content) return { error: "content is required for action=paradox" };
+				if (!args.linked_entity_ids || !Array.isArray(args.linked_entity_ids) || args.linked_entity_ids.length < 2) {
+					return { error: "linked_entity_ids is required for action=paradox and must contain at least 2 entity IDs (the identity cores in friction)" };
+				}
+				const invalidId = (args.linked_entity_ids as string[]).find((id: string) => !/^[a-zA-Z0-9_-]+$/.test(id));
+				if (invalidId) {
+					return { error: `Invalid entity ID format: ${invalidId}` };
+				}
+
+				const paradoxLoop: OpenLoop = {
+					id: generateId("loop"),
+					content: args.content,
+					status: args.status || "burning",
+					territory: storage.validateTerritory(args.territory || "self"),
+					created: getTimestamp(),
+					mode: 'paradox',
+					linked_entity_ids: args.linked_entity_ids as string[]
+				};
+
+				await storage.appendOpenLoop(paradoxLoop);
+				return {
+					created: true,
+					id: paradoxLoop.id,
+					mode: 'paradox',
+					status: paradoxLoop.status,
+					linked_entity_ids: paradoxLoop.linked_entity_ids,
+					hint: "Zeigarnik holds this. Process it via mind_pull(process:true) on linked observations. Resolve when integrated."
+				};
 			}
 
 			if (action === "list") {
@@ -248,27 +291,70 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 
 				return {
 					total_active: active.length,
-					loops: active.map(l => ({ id: l.id, content: l.content, status: l.status, territory: l.territory, created: l.created }))
+					loops: active.map(l => ({
+						id: l.id,
+						content: l.content,
+						status: l.status,
+						territory: l.territory,
+						created: l.created,
+						mode: l.mode ?? 'standard',
+						...(l.linked_entity_ids?.length ? { linked_entity_ids: l.linked_entity_ids } : {})
+					}))
 				};
 			}
 
 			if (action === "resolve") {
-				if (!args.loop_id) return { error: "loop_id is required for action=resolve" };
+				if (!args.id) return { error: "id is required for action=resolve" };
 
 				const loops = await storage.readOpenLoops();
-				const idx = loops.findIndex(l => l.id === args.loop_id);
+				const idx = loops.findIndex(l => l.id === args.id);
 
 				if (idx === -1) return { resolved: false, error: "Loop not found" };
 
-				loops[idx].status = "resolved";
-				loops[idx].resolved = getTimestamp();
-				loops[idx].resolution_note = args.resolution_note;
+				const loop = loops[idx];
+				loop.status = "resolved";
+				loop.resolved = getTimestamp();
+				loop.resolution_note = args.resolution_note;
 
 				await storage.writeOpenLoops(loops);
-				return { resolved: true, id: args.loop_id };
+
+				const result: Record<string, unknown> = { resolved: true, id: args.id, mode: loop.mode ?? 'standard' };
+
+				// Optional synthesis observation from resolution
+				if (args.create_synthesis && args.resolution_note) {
+					const synthesisTerritory = storage.validateTerritory(loop.territory || "self");
+					const synthesis: Observation = {
+						id: generateId("obs"),
+						content: args.resolution_note,
+						territory: synthesisTerritory,
+						created: getTimestamp(),
+						texture: {
+							salience: "active",
+							vividness: "vivid",
+							charge: [],
+							grip: "present",
+							charge_phase: "fresh",
+							novelty_score: 1.0
+						},
+						context: `Synthesis from resolved loop: ${args.id}`,
+						access_count: 0,
+						last_accessed: getTimestamp()
+					};
+					(synthesis as any).type = "synthesis";
+
+					await storage.appendToTerritory(synthesisTerritory, synthesis);
+
+					result.synthesis = {
+						created: true,
+						id: synthesis.id,
+						territory: synthesisTerritory
+					};
+				}
+
+				return result;
 			}
 
-			return { error: `Unknown action: ${action}. Must be open, list, or resolve.` };
+			return { error: `Unknown action: ${action}. Must be open, paradox, list, or resolve.` };
 		}
 
 		default:

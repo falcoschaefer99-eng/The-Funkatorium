@@ -115,11 +115,14 @@ export const TOOL_DEFS = [
 	},
 	{
 		name: "mind_pull",
-		description: "Get full content of a specific observation by ID. Updates access count.",
+		description: "Get full content of a specific observation by ID. Updates access count. Set process=true to record an engagement in the processing log and advance charge_phase when threshold is met.",
 		inputSchema: {
 			type: "object",
 			properties: {
-				id: { type: "string", description: "Observation ID" }
+				id: { type: "string", description: "Observation ID" },
+				process: { type: "boolean", default: false, description: "Record a processing engagement in the processing log. Advances charge_phase when threshold met (3 processings, or 2 if linked to a burning paradox loop)." },
+				processing_note: { type: "string", description: "[process=true] What you're noticing or holding while engaging with this observation" },
+				charge: { type: "array", items: { type: "string" }, description: "[process=true] Emotional state during processing" }
 			},
 			required: ["id"]
 		}
@@ -406,7 +409,7 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 					if (context.waitUntil) {
 						context.waitUntil(
 							Promise.all([
-								storage.recordCoSurfacing(returnedIds),
+								storage.recordMemoryCascade(returnedIds),
 								storage.updateSurfacingEffects(returnedIds)
 							]).catch(err => console.error("mind_query hybrid side effects failed:", err instanceof Error ? err.message : "unknown error"))
 						);
@@ -548,12 +551,40 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 			// Increment access count + stamp last_accessed — no destructive territory rewrite.
 			await storage.updateObservationAccess(args.id);
 
-			return {
+			const baseResult: Record<string, unknown> = {
 				...pulledResult.observation,
 				territory: pulledResult.territory,
 				essence: extractEssence(pulledResult.observation),
 				pull: calculatePullStrength(pulledResult.observation)
 			};
+
+			// Processing engagement — record to processing_log and advance charge_phase if threshold met.
+			if (args.process === true) {
+				const chargeAtProcessing = args.charge ? (Array.isArray(args.charge) ? args.charge : [args.charge]) : [];
+
+				// INSERT processing_log entry
+				await storage.createProcessingEntry({
+					observation_id: args.id,
+					processing_note: args.processing_note ?? undefined,
+					charge_at_processing: chargeAtProcessing,
+					somatic_at_processing: undefined
+				});
+
+				// Increment processing_count on the observation, get new count
+				const newCount = await storage.incrementProcessingCount(args.id);
+
+				// Check if charge_phase should advance
+				const phaseResult = await storage.advanceChargePhase(args.id);
+
+				baseResult.processing = {
+					recorded: true,
+					processing_count: newCount,
+					phase_advanced: phaseResult.advanced,
+					...(phaseResult.advanced ? { new_phase: phaseResult.new_phase } : {})
+				};
+			}
+
+			return baseResult;
 		}
 
 		case "mind_edit": {
@@ -587,6 +618,9 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 
 				const { observation: obs, territory } = found;
 				const texture = obs.texture || { salience: "active", vividness: "vivid", charge: [], grip: "present" };
+
+				// Snapshot current state before mutating — every texture edit gets a version row.
+				await storage.createVersion(obs.id, obs.content, obs.texture, "texture_edit");
 
 				if (args.salience) texture.salience = args.salience;
 				if (args.vividness) texture.vividness = args.vividness;

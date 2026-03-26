@@ -3,6 +3,38 @@
 All notable changes to MUSE Brain are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] — 2026-03-26
+
+The emotional processing circle. Paradox system, charge processing, observation versioning, timeline, and cross-tenant daemon intelligence.
+
+### Added
+- **Paradox system** — open loops gain `mode=paradox` with `linked_entity_ids`, linking identity cores in productive friction. Zeigarnik effect properly housed.
+- **Charge processing** — `mind_pull(process: true)` records engagement in `processing_log`, increments processing count, advances charge phase. Burning paradoxes accelerate processing (threshold 2 vs 3).
+- **Loop resolution** — `mind_loop(action: "resolve")` closes loops with resolution notes, optionally creates synthesis observations.
+- **Observation versioning** — every `mind_edit` snapshots previous state to `observation_versions`. Full edit history per observation.
+- **mind_timeline** — chronological observation view with entity/territory/date/charge filters. Semantic search for time-travel ("what was I thinking about X in January?").
+- **Kit hygiene daemon** — per-agent cleanup: dedup proposals (>0.92 similarity), archival (>20 metabolized), consolidation (>50 total).
+- **Cross-agent synthesis daemon** — detects convergent findings from different agents about the same entity, creates consolidation candidates.
+- **Cross-tenant proposals daemon** — finds convergent observations between Rook and Rainer in shared territories (craft, philosophy only). Security-scoped.
+- **Paradox detection daemon** — scans identity cores for unacknowledged contradictions, proposes paradox loops.
+- **Consolidation acceptance** — accepting consolidation proposals creates skill observations, metabolizes source observations, updates agent context.
+- **Tasks table** — schema foundation for Sprint 7 delegation system (cross-tenant task assignment, autonomous wake scheduling).
+- **Letter types** — `letter_type` field: personal (sacred), handoff (task delegation), proposal (suggestions).
+- **Dispatch feedback table** — Karpathy scalar tracking for agent dispatch effectiveness.
+
+### Changed
+- **`co_surfacing` → `memory_cascade`** — table, methods, and all references renamed across 11 files.
+- **`observation_sits` → `processing_log`** — our vocabulary for engagement tracking, created fresh.
+- **Daemon expanded** — 4 → 8 tasks per cycle (proposals, learning, cascade, orphans + kit-hygiene, cross-agent, cross-tenant, paradox-detection).
+- **`mind_loop`** — new actions: `paradox`, `resolve`. Existing `create` gains `mode` and `linked_entity_ids` params.
+- **`mind_pull`** — gains `process`, `processing_note`, `charge` params for engagement tracking.
+- **`mind_propose`** — 7 proposal types (was 3): link, consolidation, dedup, cross_agent, cross_tenant, paradox_detected, skill_generation.
+
+### Migration
+- `006_sprint6_foundation.sql` — 5 new tables, 3 column additions, 1 table rename, 1 index rename.
+
+---
+
 ## [1.0.0] — 2026-03-25
 
 The engine. Postgres-backed spiking memory system with hybrid search, entity model, and autonomous daemon intelligence.
@@ -15,9 +47,9 @@ The engine. Postgres-backed spiking memory system with hybrid search, entity mod
 - **Neural Surfacing v1** — dynamic retrieval weighted by grip, charge phase, novelty, and circadian rhythm (`5abaa09`)
 - **Entity model** — `entities` + `relations` tables, `mind_entity` tool with 7 actions, entity gravity in search (`f845963`)
 - **Agent entity seeds** — 24 agents (14 builder + 10 creative) registered as entities (`f845963`)
-- **Daemon Intelligence** — autonomous proposals, orphan rescue, learning rates, cosurfacing tracking (`ef56f8e`)
+- **Daemon Intelligence** — autonomous proposals, orphan rescue, learning rates, memory cascade tracking (`ef56f8e`)
 - **Hyperdrive** — postgres.js via Cloudflare Hyperdrive, 1000 subrequest limit (was 50), `prepare: false` mandatory (`84fc7d4`)
-- **All daemon tasks enabled** — proposals, learning, cosurfacing, orphans, subconscious, novelty, summary backfill, decay, overviews, embedding backfill (`84fc7d4`)
+- **All daemon tasks enabled** — proposals, learning, memory cascade, orphans, subconscious, novelty, summary backfill, decay, overviews, embedding backfill (`84fc7d4`)
 
 ### Fixed
 - Data loss prevention in transaction handling + Date object serialization (`e250b43`)

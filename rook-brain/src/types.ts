@@ -79,6 +79,8 @@ export interface OpenLoop {
 	created: string;
 	resolved?: string;
 	resolution_note?: string;
+	mode?: 'standard' | 'learning_objective' | 'paradox';
+	linked_entity_ids?: string[];
 }
 
 export interface BrainState {
@@ -105,6 +107,7 @@ export interface Letter {
 	timestamp: string;
 	read: boolean;
 	charges?: string[];
+	letter_type?: 'personal' | 'handoff' | 'proposal';
 }
 
 export interface IdentityCore {
@@ -216,7 +219,7 @@ export interface RelationalState {
 export interface SubconsciousState {
 	last_processed: string;
 	hot_entities: Array<{ entity: string; mention_count: number; recent_charges: string[] }>;
-	co_surfacing: Array<{ pair: [string, string]; count: number }>;
+	memory_cascade: Array<{ pair: [string, string]; count: number }>;
 	mood_inference: { suggested_mood: string; confidence: number; based_on: string[] };
 	orphans: Array<{ id: string; territory: string; reason: string }>;
 }
@@ -295,7 +298,7 @@ export interface EntityFilter {
 export interface DaemonProposal {
 	id: string;
 	tenant_id: string;
-	proposal_type: 'link' | 'orphan_rescue';
+	proposal_type: 'link' | 'orphan_rescue' | 'consolidation' | 'dedup' | 'cross_agent' | 'cross_tenant' | 'paradox_detected';
 	source_id: string;
 	target_id: string;
 	similarity?: number;
@@ -323,4 +326,83 @@ export interface DaemonConfig {
 	link_proposal_threshold: number;
 	last_threshold_update?: string;
 	data: Record<string, unknown>;
+}
+
+// --- Sprint 6: New primitives ---
+
+export interface ObservationVersion {
+	id: string;
+	tenant_id: string;
+	observation_id: string;
+	version_num: number;
+	content: string;
+	texture: Texture;
+	change_reason?: string;
+	created_at: string;
+}
+
+export interface ProcessingEntry {
+	id: string;
+	tenant_id: string;
+	observation_id: string;
+	processing_note?: string;
+	charge_at_processing: string[];
+	somatic_at_processing?: string;
+	created_at: string;
+}
+
+export interface ConsolidationCandidate {
+	id: string;
+	tenant_id: string;
+	source_observation_ids: string[];
+	pattern_description: string;
+	suggested_territory?: string;
+	suggested_type: 'skill' | 'identity' | 'synthesis';
+	status: 'pending' | 'accepted' | 'rejected' | 'deferred';
+	created_at: string;
+	reviewed_at?: string;
+}
+
+export interface DispatchFeedback {
+	id: string;
+	tenant_id: string;
+	agent_entity_id?: string;
+	task_type: string;
+	dispatched_at: string;
+	outcome?: 'effective' | 'partial' | 'ineffective' | 'redirected';
+	findings_count: number;
+	findings_acted: number;
+	confidence_avg?: number;
+	notes?: string;
+	reviewed_at?: string;
+}
+
+export interface DispatchStat {
+	task_type: string;
+	total: number;
+	effective: number;
+	partial: number;
+	ineffective: number;
+	redirected: number;
+	avg_confidence: number;
+}
+
+export interface Task {
+	id: string;
+	tenant_id: string;
+	assigned_tenant?: string;
+	title: string;
+	description?: string;
+	status: 'open' | 'scheduled' | 'in_progress' | 'done' | 'deferred' | 'cancelled';
+	priority: 'burning' | 'high' | 'normal' | 'low' | 'someday';
+	estimated_effort?: string;
+	scheduled_wake?: string;
+	source?: string;
+	linked_observation_ids: string[];
+	linked_entity_ids: string[];
+	depends_on?: string[];
+	completion_note?: string;
+	created_at: string;
+	updated_at: string;
+	completed_at?: string;
 }
