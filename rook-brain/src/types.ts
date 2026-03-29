@@ -493,3 +493,68 @@ export interface Task {
 	updated_at: string;
 	completed_at?: string;
 }
+
+export type AgentRuntimeTriggerMode = 'schedule' | 'webhook' | 'manual' | 'delegated';
+export type AgentRuntimeSessionStatus = 'active' | 'paused' | 'ended' | 'failed';
+export type AgentRuntimeRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'deferred';
+export type AgentRuntimeExecutionMode = 'lean' | 'balanced' | 'explore';
+export type AgentRuntimeWakeKind = 'duty' | 'impulse';
+
+export interface AgentRuntimeSession {
+	id: string;
+	tenant_id: string;
+	agent_tenant: string;
+	session_id: string;
+	status: AgentRuntimeSessionStatus;
+	trigger_mode: AgentRuntimeTriggerMode;
+	source_task_id?: string;
+	metadata: Record<string, unknown>;
+	last_resumed_at?: string;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface AgentRuntimeRun {
+	id: string;
+	tenant_id: string;
+	agent_tenant: string;
+	session_id?: string;
+	trigger_mode: AgentRuntimeTriggerMode;
+	task_id?: string;
+	status: AgentRuntimeRunStatus;
+	started_at?: string;
+	completed_at?: string;
+	next_wake_at?: string;
+	summary?: string;
+	error?: string;
+	metadata: Record<string, unknown>;
+	created_at: string;
+}
+
+export interface AgentRuntimePolicy {
+	id: string;
+	tenant_id: string;
+	agent_tenant: string;
+	execution_mode: AgentRuntimeExecutionMode;
+	daily_wake_budget: number;
+	impulse_wake_budget: number;
+	reserve_wakes: number;
+	min_impulse_interval_minutes: number;
+	max_tool_calls_per_run: number;
+	max_parallel_delegations: number;
+	require_priority_clear_for_impulse: boolean;
+	updated_by?: string;
+	metadata: Record<string, unknown>;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface AgentRuntimeUsage {
+	agent_tenant: string;
+	since: string;
+	total_runs: number;
+	duty_runs: number;
+	impulse_runs: number;
+	last_run_at?: string;
+	last_impulse_run_at?: string;
+}

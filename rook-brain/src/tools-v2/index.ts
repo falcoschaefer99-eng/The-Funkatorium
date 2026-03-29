@@ -21,6 +21,7 @@ import { TOOL_DEFS as proposeDefs, handleTool as handlePropose } from "./propose
 import { TOOL_DEFS as healthDefs, handleTool as handleHealth } from "./health";
 import { TOOL_DEFS as timelineDefs, handleTool as handleTimeline } from "./timeline";
 import { TOOL_DEFS as tasksDefs, handleTool as handleTasks } from "./tasks";
+import { TOOL_DEFS as runtimeDefs, handleTool as handleRuntime } from "./runtime";
 
 // ============ AGGREGATED TOOL DEFINITIONS ============
 
@@ -41,7 +42,8 @@ export const TOOL_DEFS = [
 	...proposeDefs,
 	...healthDefs,
 	...timelineDefs,
-	...tasksDefs
+	...tasksDefs,
+	...runtimeDefs
 ];
 
 // ============ TOOL DISPATCH TABLE ============
@@ -104,7 +106,10 @@ const TOOL_MODULES: Record<string, (name: string, args: any, context: ToolContex
 	mind_timeline: handleTimeline,
 
 	// Tasks (Sprint 7)
-	mind_task: handleTasks
+	mind_task: handleTasks,
+
+	// Autonomous Runtime (Sprint 8)
+	mind_runtime: handleRuntime
 };
 
 // ============ EXECUTE TOOL ============

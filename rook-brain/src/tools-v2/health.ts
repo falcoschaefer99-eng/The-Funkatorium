@@ -1,19 +1,19 @@
 // ============ HEALTH TOOL (v2) ============
 // mind_health — system health and daemon intelligence diagnostics.
-// section=all|proposals|orphans|embeddings|cascade|dispatch
+// section=all|proposals|orphans|embeddings|cascade|dispatch|runtime
 
 import type { ToolContext } from "./context";
 
 export const TOOL_DEFS = [
 	{
 		name: "mind_health",
-		description: "Brain system health and daemon intelligence diagnostics. section=all: full snapshot. section=proposals: proposal stats + current threshold. section=orphans: orphan counts and age. section=embeddings: embedding coverage. section=cascade: top memory cascade observation pairs.",
+		description: "Brain system health and daemon intelligence diagnostics. section=all: full snapshot. section=proposals: proposal stats + current threshold. section=orphans: orphan counts and age. section=embeddings: embedding coverage. section=cascade: top memory cascade observation pairs. section=runtime: autonomous session, policy, usage counters, and recent run ledger.",
 		inputSchema: {
 			type: "object",
 			properties: {
 				section: {
 					type: "string",
-					enum: ["all", "proposals", "orphans", "embeddings", "cascade", "dispatch"],
+					enum: ["all", "proposals", "orphans", "embeddings", "cascade", "dispatch", "runtime"],
 					default: "all",
 					description: "Which section of health data to return"
 				}
@@ -35,7 +35,8 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 				orphans: section === "all" || section === "orphans",
 				embeddings: section === "all" || section === "embeddings",
 				cascade: section === "all" || section === "cascade",
-				dispatch: section === "all" || section === "dispatch"
+				dispatch: section === "all" || section === "dispatch",
+				runtime: section === "all" || section === "runtime"
 			};
 
 			const result: Record<string, unknown> = {};
@@ -102,6 +103,28 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 					storage.getDispatchStats().then(stats => {
 						result.dispatch = {
 							by_task_type: stats
+						};
+					})
+				);
+			}
+
+			if (include.runtime) {
+				const runtimeWindowStart = new Date();
+				runtimeWindowStart.setUTCHours(0, 0, 0, 0);
+				tasks.push(
+					Promise.all([
+						storage.getAgentRuntimeSession(storage.getTenant()),
+						storage.listAgentRuntimeRuns(storage.getTenant(), 5),
+						storage.getAgentRuntimePolicy(storage.getTenant()),
+						storage.getAgentRuntimeUsage(storage.getTenant(), runtimeWindowStart.toISOString())
+					]).then(([session, runs, policy, usage]) => {
+						result.runtime = {
+							has_session: session != null,
+							session,
+							policy,
+							usage_window_start: runtimeWindowStart.toISOString(),
+							usage_today: usage,
+							recent_runs: runs
 						};
 					})
 				);

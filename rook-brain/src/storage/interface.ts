@@ -36,7 +36,11 @@ import type {
 	ConsolidationCandidate,
 	DispatchFeedback,
 	DispatchStat,
-	Task
+	Task,
+	AgentRuntimeSession,
+	AgentRuntimeRun,
+	AgentRuntimePolicy,
+	AgentRuntimeUsage
 } from "../types";
 
 // ============ FILTER / QUERY TYPES ============
@@ -467,6 +471,35 @@ export interface IBrainStorage {
 
 	/** Get a single task by ID. When includeAssigned is true, also returns tasks assigned to this tenant from other tenants. */
 	getTask(id: string, includeAssigned?: boolean): Promise<Task | null>;
+
+	// --- Autonomous Runtime (Sprint 8) ---
+
+	/** Upsert active autonomous session state for a tenant-scoped agent runtime. */
+	upsertAgentRuntimeSession(
+		session: Omit<AgentRuntimeSession, 'id' | 'tenant_id' | 'created_at' | 'updated_at'>
+	): Promise<AgentRuntimeSession>;
+
+	/** Read latest autonomous session state for a tenant-scoped agent runtime. */
+	getAgentRuntimeSession(agentTenant: string): Promise<AgentRuntimeSession | null>;
+
+	/** Append one autonomous run ledger row. */
+	createAgentRuntimeRun(
+		run: Omit<AgentRuntimeRun, 'id' | 'tenant_id' | 'created_at'>
+	): Promise<AgentRuntimeRun>;
+
+	/** List recent autonomous run ledger rows for one tenant-scoped agent runtime. */
+	listAgentRuntimeRuns(agentTenant: string, limit?: number): Promise<AgentRuntimeRun[]>;
+
+	/** Upsert runtime execution policy for one tenant-scoped agent runtime. */
+	upsertAgentRuntimePolicy(
+		policy: Omit<AgentRuntimePolicy, 'id' | 'tenant_id' | 'created_at' | 'updated_at'>
+	): Promise<AgentRuntimePolicy>;
+
+	/** Read runtime execution policy for one tenant-scoped agent runtime. */
+	getAgentRuntimePolicy(agentTenant: string): Promise<AgentRuntimePolicy | null>;
+
+	/** Read runtime usage counters since the given timestamp (ISO). */
+	getAgentRuntimeUsage(agentTenant: string, since: string): Promise<AgentRuntimeUsage>;
 
 	/** Get the most recent wake log entry, newest first. */
 	readLatestWakeLog(): Promise<WakeLogEntry | null>;

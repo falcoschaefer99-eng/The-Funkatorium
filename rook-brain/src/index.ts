@@ -173,6 +173,50 @@ export default {
 			});
 		}
 
+		// Runtime trigger bridge — webhook/scheduler-friendly entrypoint.
+		// Uses existing API-key auth and tenant scoping.
+		if (url.pathname === "/runtime/trigger" && request.method === "POST") {
+			const tenant = request.headers.get("X-Brain-Tenant") || "rook";
+			if (!ALLOWED_TENANTS.includes(tenant as typeof ALLOWED_TENANTS[number])) {
+				return new Response(JSON.stringify({ error: "Invalid tenant" }), {
+					status: 400,
+					headers: { "Content-Type": "application/json", ...corsHeaders }
+				});
+			}
+
+			let payload: Record<string, unknown> = {};
+			if (rawBody.byteLength > 0) {
+				try {
+					const parsed = JSON.parse(new TextDecoder().decode(rawBody));
+					if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+						return new Response(JSON.stringify({ error: "Body must be a JSON object" }), {
+							status: 400,
+							headers: { "Content-Type": "application/json", ...corsHeaders }
+						});
+					}
+					payload = parsed as Record<string, unknown>;
+				} catch {
+					return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+						status: 400,
+						headers: { "Content-Type": "application/json", ...corsHeaders }
+					});
+				}
+			}
+
+			const triggerDbUrl = env.HYPERDRIVE?.connectionString ?? env.DATABASE_URL;
+			const storage = createStorage({ backend: 'postgres', databaseUrl: triggerDbUrl }, tenant);
+			const result = await executeTool("mind_runtime", { action: "trigger", ...payload }, {
+				storage,
+				ai: env.AI,
+				waitUntil: ctx.waitUntil.bind(ctx)
+			});
+			const status = result?.error ? 400 : 200;
+			return new Response(JSON.stringify(result), {
+				status,
+				headers: { "Content-Type": "application/json", ...corsHeaders }
+			});
+		}
+
 		// SSE for MCP connection
 		if (url.pathname === "/mcp" && request.method === "GET") {
 			const { readable, writable } = new TransformStream();

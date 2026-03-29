@@ -63,7 +63,11 @@ import type {
 	ConsolidationCandidate,
 	DispatchFeedback,
 	DispatchStat,
-	Task
+	Task,
+	AgentRuntimeSession,
+	AgentRuntimeRun,
+	AgentRuntimePolicy,
+	AgentRuntimeUsage
 } from "../types";
 
 import { TERRITORIES, VALID_TERRITORIES, HARD_BOUNDARIES, RELATIONSHIP_GATES, CIRCADIAN_PHASES, ALLOWED_TENANTS } from "../constants";
@@ -356,7 +360,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 		try {
 			if (observations.length === 0) {
 				// Simple case: just delete, no inserts needed.
-				await this.sql.begin(async (sql) => {
+				await this.sql.begin(async (sql: any) => {
 					await sql`
 						DELETE FROM observations
 						WHERE tenant_id = ${this.tenant}
@@ -372,7 +376,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 			}
 
 			// First chunk: DELETE + first batch of INSERTs (atomic).
-			await this.sql.begin(async (sql) => {
+			await this.sql.begin(async (sql: any) => {
 				await sql`
 					DELETE FROM observations
 					WHERE tenant_id = ${this.tenant}
@@ -383,7 +387,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 
 			// Remaining chunks: INSERT only (DELETE already committed).
 			for (let i = 1; i < chunks.length; i++) {
-				await this.sql.begin(async (sql) => {
+				await this.sql.begin(async (sql: any) => {
 					await this._executeInsertQueries(sql, chunks[i], territory);
 				});
 			}
@@ -395,7 +399,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 
 	/** Execute observation INSERTs within an open postgres.js transaction. */
 	private async _executeInsertQueries(
-		sql: postgres.TransactionSql,
+		sql: any,
 		observations: Observation[],
 		territory: string
 	): Promise<void> {
@@ -955,7 +959,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 
 	async writeOpenLoops(loops: OpenLoop[]): Promise<void> {
 		try {
-			await this.sql.begin(async (sql) => {
+			await this.sql.begin(async (sql: any) => {
 				await sql`DELETE FROM open_loops WHERE tenant_id = ${this.tenant}`;
 				for (const loop of loops) {
 					await sql`
@@ -1017,7 +1021,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 
 	async writeLinks(links: Link[]): Promise<void> {
 		try {
-			await this.sql.begin(async (sql) => {
+			await this.sql.begin(async (sql: any) => {
 				await sql`DELETE FROM links WHERE tenant_id = ${this.tenant}`;
 				for (const link of links) {
 					await sql`
@@ -1083,7 +1087,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 
 	async writeLetters(letters: Letter[]): Promise<void> {
 		try {
-			await this.sql.begin(async (sql) => {
+			await this.sql.begin(async (sql: any) => {
 				await sql`DELETE FROM letters WHERE tenant_id = ${this.tenant}`;
 				for (const letter of letters) {
 					await sql`
@@ -1149,7 +1153,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 
 	async writeIdentityCores(cores: IdentityCore[]): Promise<void> {
 		try {
-			await this.sql.begin(async (sql) => {
+			await this.sql.begin(async (sql: any) => {
 				await sql`DELETE FROM identity_cores WHERE tenant_id = ${this.tenant}`;
 				for (const core of cores) {
 					await sql`
@@ -1183,7 +1187,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 
 	async writeAnchors(anchors: Anchor[]): Promise<void> {
 		try {
-			await this.sql.begin(async (sql) => {
+			await this.sql.begin(async (sql: any) => {
 				await sql`DELETE FROM anchors WHERE tenant_id = ${this.tenant}`;
 				for (const anchor of anchors) {
 					await sql`
@@ -1217,7 +1221,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 
 	async writeDesires(desires: Desire[]): Promise<void> {
 		try {
-			await this.sql.begin(async (sql) => {
+			await this.sql.begin(async (sql: any) => {
 				await sql`DELETE FROM desires WHERE tenant_id = ${this.tenant}`;
 				for (const desire of desires) {
 					await sql`
@@ -1324,7 +1328,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 
 	async writeRelationalState(states: RelationalState[]): Promise<void> {
 		try {
-			await this.sql.begin(async (sql) => {
+			await this.sql.begin(async (sql: any) => {
 				await sql`DELETE FROM relational_states WHERE tenant_id = ${this.tenant}`;
 				for (const state of states) {
 					await sql`
@@ -1388,7 +1392,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 
 	async writeTriggers(triggers: TriggerCondition[]): Promise<void> {
 		try {
-			await this.sql.begin(async (sql) => {
+			await this.sql.begin(async (sql: any) => {
 				await sql`DELETE FROM triggers WHERE tenant_id = ${this.tenant}`;
 				for (const trigger of triggers) {
 					await sql`
@@ -1443,7 +1447,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 		try {
 			await this.sql`
 				INSERT INTO consent (tenant_id, data, updated_at)
-				VALUES (${this.tenant}, ${this.sql.json(consent)}, NOW())
+				VALUES (${this.tenant}, ${JSON.stringify(consent)}, NOW())
 				ON CONFLICT (tenant_id)
 				DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at
 			`;
@@ -1540,7 +1544,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 
 	async writeIronGripIndex(entries: IronGripEntry[]): Promise<void> {
 		try {
-			await this.sql.begin(async (sql) => {
+			await this.sql.begin(async (sql: any) => {
 				await sql`DELETE FROM iron_grip_index WHERE tenant_id = ${this.tenant}`;
 				for (const entry of entries) {
 					await sql`
@@ -3432,6 +3436,215 @@ export class PostgresBrainStorage implements IBrainStorage {
 		}
 	}
 
+	async upsertAgentRuntimeSession(
+		session: Omit<AgentRuntimeSession, 'id' | 'tenant_id' | 'created_at' | 'updated_at'>
+	): Promise<AgentRuntimeSession> {
+		try {
+			const rows = await this.sql`
+				INSERT INTO agent_runtime_sessions (
+					id, tenant_id, agent_tenant, session_id, status, trigger_mode, source_task_id, metadata, last_resumed_at
+				) VALUES (
+					${generateId("runtime_session")},
+					${this.tenant},
+					${session.agent_tenant},
+					${session.session_id},
+					${session.status},
+					${session.trigger_mode},
+					${session.source_task_id ?? null},
+					${this.sql.json((session.metadata ?? {}) as any)},
+					${session.last_resumed_at ?? null}
+				)
+				ON CONFLICT (tenant_id, agent_tenant) DO UPDATE SET
+					session_id      = EXCLUDED.session_id,
+					status          = EXCLUDED.status,
+					trigger_mode    = EXCLUDED.trigger_mode,
+					source_task_id  = EXCLUDED.source_task_id,
+					metadata        = EXCLUDED.metadata,
+					last_resumed_at = EXCLUDED.last_resumed_at,
+					updated_at      = NOW()
+				RETURNING *
+			`;
+			if (!rows.length) throw new Error("Failed to upsert runtime session");
+			return this._rowToAgentRuntimeSession(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("upsertAgentRuntimeSession failed:", err instanceof Error ? err.message : "unknown error");
+			throw new Error("Failed to upsert runtime session");
+		}
+	}
+
+	async getAgentRuntimeSession(agentTenant: string): Promise<AgentRuntimeSession | null> {
+		try {
+			const rows = await this.sql`
+				SELECT *
+				FROM agent_runtime_sessions
+				WHERE tenant_id = ${this.tenant}
+				  AND agent_tenant = ${agentTenant}
+				LIMIT 1
+			`;
+			if (!rows.length) return null;
+			return this._rowToAgentRuntimeSession(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("getAgentRuntimeSession failed:", err instanceof Error ? err.message : "unknown error");
+			return null;
+		}
+	}
+
+	async createAgentRuntimeRun(
+		run: Omit<AgentRuntimeRun, 'id' | 'tenant_id' | 'created_at'>
+	): Promise<AgentRuntimeRun> {
+		try {
+			const rows = await this.sql`
+				INSERT INTO agent_runtime_runs (
+					id, tenant_id, agent_tenant, session_id, trigger_mode, task_id, status,
+					started_at, completed_at, next_wake_at, summary, error, metadata
+				) VALUES (
+					${generateId("runtime_run")},
+					${this.tenant},
+					${run.agent_tenant},
+					${run.session_id ?? null},
+					${run.trigger_mode},
+					${run.task_id ?? null},
+					${run.status},
+					${run.started_at ?? null},
+					${run.completed_at ?? null},
+					${run.next_wake_at ?? null},
+					${run.summary ?? null},
+					${run.error ?? null},
+					${this.sql.json((run.metadata ?? {}) as any)}
+				)
+				RETURNING *
+			`;
+			if (!rows.length) throw new Error("Failed to create runtime run");
+			return this._rowToAgentRuntimeRun(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("createAgentRuntimeRun failed:", err instanceof Error ? err.message : "unknown error");
+			throw new Error("Failed to create runtime run");
+		}
+	}
+
+	async listAgentRuntimeRuns(agentTenant: string, limit?: number): Promise<AgentRuntimeRun[]> {
+		const cap = Math.min(limit ?? 20, 100);
+		try {
+			const rows = await this.sql`
+				SELECT *
+				FROM agent_runtime_runs
+				WHERE tenant_id = ${this.tenant}
+				  AND agent_tenant = ${agentTenant}
+				ORDER BY created_at DESC
+				LIMIT ${cap}
+			`;
+			return rows.map(row => this._rowToAgentRuntimeRun(row as Record<string, unknown>));
+		} catch (err) {
+			console.error("listAgentRuntimeRuns failed:", err instanceof Error ? err.message : "unknown error");
+			return [];
+		}
+	}
+
+	async upsertAgentRuntimePolicy(
+		policy: Omit<AgentRuntimePolicy, 'id' | 'tenant_id' | 'created_at' | 'updated_at'>
+	): Promise<AgentRuntimePolicy> {
+		try {
+			const rows = await this.sql`
+				INSERT INTO agent_runtime_policies (
+					id, tenant_id, agent_tenant, execution_mode, daily_wake_budget, impulse_wake_budget,
+					reserve_wakes, min_impulse_interval_minutes, max_tool_calls_per_run, max_parallel_delegations,
+					require_priority_clear_for_impulse, updated_by, metadata
+				) VALUES (
+					${generateId("runtime_policy")},
+					${this.tenant},
+					${policy.agent_tenant},
+					${policy.execution_mode},
+					${policy.daily_wake_budget},
+					${policy.impulse_wake_budget},
+					${policy.reserve_wakes},
+					${policy.min_impulse_interval_minutes},
+					${policy.max_tool_calls_per_run},
+					${policy.max_parallel_delegations},
+					${policy.require_priority_clear_for_impulse},
+					${policy.updated_by ?? null},
+					${this.sql.json((policy.metadata ?? {}) as any)}
+				)
+				ON CONFLICT (tenant_id, agent_tenant) DO UPDATE SET
+					execution_mode                    = EXCLUDED.execution_mode,
+					daily_wake_budget                 = EXCLUDED.daily_wake_budget,
+					impulse_wake_budget               = EXCLUDED.impulse_wake_budget,
+					reserve_wakes                     = EXCLUDED.reserve_wakes,
+					min_impulse_interval_minutes      = EXCLUDED.min_impulse_interval_minutes,
+					max_tool_calls_per_run            = EXCLUDED.max_tool_calls_per_run,
+					max_parallel_delegations          = EXCLUDED.max_parallel_delegations,
+					require_priority_clear_for_impulse = EXCLUDED.require_priority_clear_for_impulse,
+					updated_by                        = EXCLUDED.updated_by,
+					metadata                          = EXCLUDED.metadata,
+					updated_at                        = NOW()
+				RETURNING *
+			`;
+			if (!rows.length) throw new Error("Failed to upsert runtime policy");
+			return this._rowToAgentRuntimePolicy(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("upsertAgentRuntimePolicy failed:", err instanceof Error ? err.message : "unknown error");
+			throw new Error("Failed to upsert runtime policy");
+		}
+	}
+
+	async getAgentRuntimePolicy(agentTenant: string): Promise<AgentRuntimePolicy | null> {
+		try {
+			const rows = await this.sql`
+				SELECT *
+				FROM agent_runtime_policies
+				WHERE tenant_id = ${this.tenant}
+				  AND agent_tenant = ${agentTenant}
+				LIMIT 1
+			`;
+			if (!rows.length) return null;
+			return this._rowToAgentRuntimePolicy(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("getAgentRuntimePolicy failed:", err instanceof Error ? err.message : "unknown error");
+			return null;
+		}
+	}
+
+	async getAgentRuntimeUsage(agentTenant: string, since: string): Promise<AgentRuntimeUsage> {
+		try {
+			const rows = await this.sql`
+				SELECT
+					COUNT(*)::int AS total_runs,
+					COUNT(*) FILTER (
+						WHERE COALESCE(metadata->>'wake_kind', 'duty') = 'duty'
+					)::int AS duty_runs,
+					COUNT(*) FILTER (
+						WHERE COALESCE(metadata->>'wake_kind', 'duty') = 'impulse'
+					)::int AS impulse_runs,
+					MAX(created_at) AS last_run_at,
+					MAX(created_at) FILTER (
+						WHERE COALESCE(metadata->>'wake_kind', 'duty') = 'impulse'
+					) AS last_impulse_run_at
+				FROM agent_runtime_runs
+				WHERE tenant_id = ${this.tenant}
+				  AND agent_tenant = ${agentTenant}
+				  AND created_at >= ${since}::timestamptz
+			`;
+			const row = rows[0] as Record<string, unknown> | undefined;
+			return {
+				agent_tenant: agentTenant,
+				since,
+				total_runs: (row?.total_runs as number) ?? 0,
+				duty_runs: (row?.duty_runs as number) ?? 0,
+				impulse_runs: (row?.impulse_runs as number) ?? 0,
+				last_run_at: toISOString(row?.last_run_at),
+				last_impulse_run_at: toISOString(row?.last_impulse_run_at)
+			};
+		} catch (err) {
+			console.error("getAgentRuntimeUsage failed:", err instanceof Error ? err.message : "unknown error");
+			return {
+				agent_tenant: agentTenant,
+				since,
+				total_runs: 0,
+				duty_runs: 0,
+				impulse_runs: 0
+			};
+		}
+	}
+
 	// ============ ROW MAPPERS (Sprint 4) ============
 
 	private _rowToProposal(row: Record<string, unknown>): DaemonProposal {
@@ -3547,6 +3760,61 @@ export class PostgresBrainStorage implements IBrainStorage {
 			created_at: toISOString(row.created_at) || new Date().toISOString(),
 			updated_at: toISOString(row.updated_at) || new Date().toISOString(),
 			completed_at: toISOString(row.completed_at)
+		};
+	}
+
+	private _rowToAgentRuntimeSession(row: Record<string, unknown>): AgentRuntimeSession {
+		return {
+			id: row.id as string,
+			tenant_id: row.tenant_id as string,
+			agent_tenant: row.agent_tenant as string,
+			session_id: row.session_id as string,
+			status: row.status as AgentRuntimeSession["status"],
+			trigger_mode: row.trigger_mode as AgentRuntimeSession["trigger_mode"],
+			source_task_id: row.source_task_id as string | undefined,
+			metadata: (row.metadata as Record<string, unknown>) ?? {},
+			last_resumed_at: toISOString(row.last_resumed_at),
+			created_at: toISOString(row.created_at) || new Date().toISOString(),
+			updated_at: toISOString(row.updated_at) || new Date().toISOString()
+		};
+	}
+
+	private _rowToAgentRuntimeRun(row: Record<string, unknown>): AgentRuntimeRun {
+		return {
+			id: row.id as string,
+			tenant_id: row.tenant_id as string,
+			agent_tenant: row.agent_tenant as string,
+			session_id: row.session_id as string | undefined,
+			trigger_mode: row.trigger_mode as AgentRuntimeRun["trigger_mode"],
+			task_id: row.task_id as string | undefined,
+			status: row.status as AgentRuntimeRun["status"],
+			started_at: toISOString(row.started_at),
+			completed_at: toISOString(row.completed_at),
+			next_wake_at: toISOString(row.next_wake_at),
+			summary: row.summary as string | undefined,
+			error: row.error as string | undefined,
+			metadata: (row.metadata as Record<string, unknown>) ?? {},
+			created_at: toISOString(row.created_at) || new Date().toISOString()
+		};
+	}
+
+	private _rowToAgentRuntimePolicy(row: Record<string, unknown>): AgentRuntimePolicy {
+		return {
+			id: row.id as string,
+			tenant_id: row.tenant_id as string,
+			agent_tenant: row.agent_tenant as string,
+			execution_mode: row.execution_mode as AgentRuntimePolicy["execution_mode"],
+			daily_wake_budget: (row.daily_wake_budget as number) ?? 0,
+			impulse_wake_budget: (row.impulse_wake_budget as number) ?? 0,
+			reserve_wakes: (row.reserve_wakes as number) ?? 0,
+			min_impulse_interval_minutes: (row.min_impulse_interval_minutes as number) ?? 0,
+			max_tool_calls_per_run: (row.max_tool_calls_per_run as number) ?? 0,
+			max_parallel_delegations: (row.max_parallel_delegations as number) ?? 0,
+			require_priority_clear_for_impulse: (row.require_priority_clear_for_impulse as boolean) ?? true,
+			updated_by: row.updated_by as string | undefined,
+			metadata: (row.metadata as Record<string, unknown>) ?? {},
+			created_at: toISOString(row.created_at) || new Date().toISOString(),
+			updated_at: toISOString(row.updated_at) || new Date().toISOString()
 		};
 	}
 }

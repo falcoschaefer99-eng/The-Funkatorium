@@ -24,6 +24,21 @@ Sprint 7 closeout and the architecture lock for the next shared-core slice.
 - **Phase 2A unit tests** — `test/phase2a-calibration.spec.ts`.
 - **Pre-deploy hardening migration** — `009_predeploy_perf_and_integrity.sql` adds wake/task hot-path indexes plus router-agent foreign-key integrity for manifests.
 - **Shared tool sanitizers** — `src/tools-v2/utils.ts` centralizes text/list/metadata/timestamp normalization across the new v2 tools.
+- **Sprint 8 canonical truth map** — `docs/SPRINT8_AUTONOMOUS_EXECUTION.md` locks sprint naming, scope, and exit criteria for the autonomous execution layer.
+- **Autonomous runtime ledger foundation** — `011_autonomous_runtime_ledger.sql` introduces `agent_runtime_sessions` + `agent_runtime_runs`.
+- **`mind_runtime` (v2)** — runtime continuity tool for resumable session state and autonomous run logging (`set_session`, `get_session`, `log_run`, `list_runs`).
+- **Runtime trigger bridge (tool-level)** — `mind_runtime action=trigger` opens due scheduled tasks, logs a runtime run row, and can refresh session continuity in one call (bridge for cron/webhook/event wake paths).
+- **Runtime webhook ingress** — new authenticated `POST /runtime/trigger` endpoint executes the trigger bridge without a full MCP envelope (scheduler/webhook friendly).
+- **Runtime policy schema** — `012_runtime_policy_and_budgeting.sql` adds `agent_runtime_policies` for per-agent execution mode + wake/token guardrails.
+- **`mind_runtime` lean policy controls** — adds `set_policy`/`get_policy` actions plus `wake_kind` (`duty`/`impulse`) gating on trigger calls.
+- **Delegated-first duty claiming** — trigger flow can now auto-claim the recommended delegated open task (`status=in_progress`) to support cross-agent autonomous handoff execution loops.
+- **Trigger runner contract** — trigger responses now include `runner_contract` (`should_run`, selected task, generated prompt, `resume_session_id`) for direct headless execution wiring.
+- **Session continuity fallback** — trigger reuses stored runtime session ids when `session_id` is omitted, so schedulers/webhooks can stay stateless.
+- **Headless runner script** — `scripts/runtime-autonomous-wake.sh` wires `/runtime/trigger` to `claude -p` for duty/impulse cycles (cron or `/schedule` friendly).
+- **Runner wiring guide** — `docs/SPRINT8_RUNNER_WIRING.md` documents cloud `/schedule` and cron integration patterns.
+- **Candidate skill-capture stub** — successful admitted trigger wakes can emit `skill_candidate` observations in `craft` as reviewable autonomous-skill hypotheses.
+- **Runtime usage diagnostics** — storage/runtime health now expose day-window duty/impulse counters and policy snapshot.
+- **Runtime unit coverage** — `test/runtime-v2.spec.ts` now validates policy writes plus impulse defer gating, alongside session/run/trigger paths.
 
 ### Changed
 - **Cross-tenant task lifecycle** — assignees can now get/update/complete delegated tasks through storage paths that explicitly allow assigned-task access.
@@ -41,11 +56,20 @@ Sprint 7 closeout and the architecture lock for the next shared-core slice.
 - **Tool-layer validation hardening** — task status/priority, project lifecycle status, router consistency, and manifest/project metadata size are now validated before storage/DB constraint failures.
 - **Helper cleanup** — duplicated normalization helpers were extracted, the dead `cleanOptionalText` alias was removed, and project updates now reject no-op writes before auto-stamping `last_active_at`.
 - **Unit coverage sweep** — added explicit tests for `get` paths, duplicate-create guards, first/empty wake delta cases, dangling-entity filtering, router consistency, metadata limits, and task enum validation.
+- **`mind_health` runtime diagnostics** — `section=runtime` now surfaces current session continuity state + recent autonomous run rows.
+- **Sprint 8 checklist state** — Session continuity (`S8.2`) and trigger bridge (`S8.3`) are now marked complete.
+- **Lean autonomy behavior** — impulse wakes are now budget-aware (daily/impulse caps, reserve protection, cooldown, and high-priority gate), while duty wakes remain first-class.
+- **Cross-agent runtime handoff path** — duty triggers now support delegated-task auto-claim as a substrate step toward full S8.4 independent execution.
+- **Headless handoff readiness** — trigger now returns execution-ready prompts + resume ids, reducing scheduler-side glue for S8.1/S8.4 proof runs.
+- **Prompt-level runtime budgeting** — autonomous runner contracts now embed per-policy tool/delegation budget limits to reinforce lean execution at run time.
+- **Runner option parity** — `scripts/runtime-autonomous-wake.sh` now forwards `EMIT_SKILL_CANDIDATE` to `/runtime/trigger` (default duty=true, impulse=false).
+- **Storage typing baseline** — transaction callback typing in Postgres storage now compiles cleanly under current postgres.js typings (`npx tsc --noEmit` green).
+- **Sprint 8 checklist state** — S8.5 now marked complete via emitted skill-candidate artifacts; S8.6 remains the final proof gate.
 
 ### Developer Notes
 - Verification command: `npx vitest run --config vitest.unit.config.mts test/tasks-v2.spec.ts test/project-dossiers.spec.ts test/wake-delta.spec.ts test/phase2a-calibration.spec.ts`
 - Current unit status: 30 tests passing across task delegation closeout + project dossiers / wake delta + Phase 2A foundation + pre-deploy hardening
-- `npx tsc --noEmit` still reports only the pre-existing `TransactionSql` / `ConsentState` issues in `src/storage/postgres.ts`
+- `npx tsc --noEmit` is now clean after resolving the `TransactionSql` callback typing + consent JSON serialization issues in `src/storage/postgres.ts`
 
 ## [1.1.0] — 2026-03-26
 
