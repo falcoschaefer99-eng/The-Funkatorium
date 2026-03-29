@@ -186,7 +186,8 @@ describe('runtime v2 tool', () => {
 			limit: 50,
 			preview_limit: 5,
 			include_assigned: true,
-			wake_kind: 'duty'
+			wake_kind: 'duty',
+			emit_skill_candidate: true
 		}, { storage: storage as any });
 
 		expect(result.triggered).toBe(true);

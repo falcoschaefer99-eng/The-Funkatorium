@@ -67,7 +67,11 @@ import type {
 	AgentRuntimeSession,
 	AgentRuntimeRun,
 	AgentRuntimePolicy,
-	AgentRuntimeUsage
+	AgentRuntimeUsage,
+	CapturedSkillArtifact,
+	CapturedSkillArtifactCreate,
+	CapturedSkillArtifactFilter,
+	CapturedSkillRegistryHealth
 } from "../types";
 
 import { TERRITORIES, VALID_TERRITORIES, HARD_BOUNDARIES, RELATIONSHIP_GATES, CIRCADIAN_PHASES, ALLOWED_TENANTS } from "../constants";
@@ -226,6 +230,32 @@ function rowToAgentCapabilityManifest(row: Record<string, unknown>): AgentCapabi
 		protocols: toStringList(row.protocols),
 		skills: toSkillList(row.skills),
 		metadata: (row.metadata as Record<string, unknown>) ?? {},
+		created_at: toISOString(row.created_at) || new Date().toISOString(),
+		updated_at: toISOString(row.updated_at) || new Date().toISOString()
+	};
+}
+
+function rowToCapturedSkillArtifact(row: Record<string, unknown>): CapturedSkillArtifact {
+	return {
+		id: row.id as string,
+		tenant_id: row.tenant_id as string,
+		skill_key: row.skill_key as string,
+		version: (row.version as number) ?? 1,
+		layer: (row.layer as CapturedSkillArtifact["layer"]) ?? "captured",
+		status: (row.status as CapturedSkillArtifact["status"]) ?? "candidate",
+		name: row.name as string,
+		domain: row.domain as string | undefined,
+		environment: row.environment as string | undefined,
+		task_type: row.task_type as string | undefined,
+		agent_tenant: row.agent_tenant as string | undefined,
+		source_runtime_run_id: row.source_runtime_run_id as string | undefined,
+		source_task_id: row.source_task_id as string | undefined,
+		source_observation_id: row.source_observation_id as string | undefined,
+		provenance: (row.provenance as Record<string, unknown>) ?? {},
+		metadata: (row.metadata as Record<string, unknown>) ?? {},
+		review_note: row.review_note as string | undefined,
+		reviewed_by: row.reviewed_by as string | undefined,
+		reviewed_at: toISOString(row.reviewed_at),
 		created_at: toISOString(row.created_at) || new Date().toISOString(),
 		updated_at: toISOString(row.updated_at) || new Date().toISOString()
 	};
@@ -3433,6 +3463,180 @@ export class PostgresBrainStorage implements IBrainStorage {
 		} catch (err) {
 			console.error("getTask failed:", err instanceof Error ? err.message : "unknown error");
 			return null;
+		}
+	}
+
+	async createCapturedSkillArtifact(artifact: CapturedSkillArtifactCreate): Promise<CapturedSkillArtifact> {
+		try {
+			const rows = await this.sql`
+				WITH next_version AS (
+					SELECT COALESCE(MAX(version), 0) + 1 AS version
+					FROM captured_skills
+					WHERE tenant_id = ${this.tenant}
+					  AND skill_key = ${artifact.skill_key}
+				)
+				INSERT INTO captured_skills (
+					id, tenant_id, skill_key, version, layer, status, name, domain, environment,
+					task_type, agent_tenant, source_runtime_run_id, source_task_id, source_observation_id,
+					provenance, metadata
+				)
+				SELECT
+					${generateId("skill")},
+					${this.tenant},
+					${artifact.skill_key},
+					next_version.version,
+					${artifact.layer ?? "captured"},
+					${artifact.status ?? "candidate"},
+					${artifact.name},
+					${artifact.domain ?? null},
+					${artifact.environment ?? null},
+					${artifact.task_type ?? null},
+					${artifact.agent_tenant ?? null},
+					${artifact.source_runtime_run_id ?? null},
+					${artifact.source_task_id ?? null},
+					${artifact.source_observation_id ?? null},
+					${this.sql.json((artifact.provenance ?? {}) as any)},
+					${this.sql.json((artifact.metadata ?? {}) as any)}
+				FROM next_version
+				RETURNING *
+			`;
+			if (!rows.length) throw new Error("Failed to create captured skill artifact");
+			return rowToCapturedSkillArtifact(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("createCapturedSkillArtifact failed:", artifact.skill_key, err instanceof Error ? err.message : "unknown error");
+			throw new Error("Failed to create captured skill artifact");
+		}
+	}
+
+	async getCapturedSkillArtifact(id: string): Promise<CapturedSkillArtifact | null> {
+		try {
+			const rows = await this.sql`
+				SELECT *
+				FROM captured_skills
+				WHERE tenant_id = ${this.tenant}
+				  AND id = ${id}
+				LIMIT 1
+			`;
+			if (!rows.length) return null;
+			return rowToCapturedSkillArtifact(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("getCapturedSkillArtifact failed:", err instanceof Error ? err.message : "unknown error");
+			return null;
+		}
+	}
+
+	async listCapturedSkillArtifacts(filter?: CapturedSkillArtifactFilter): Promise<CapturedSkillArtifact[]> {
+		const cap = Math.min(filter?.limit ?? 20, 200);
+		const status = filter?.status ?? null;
+		const layer = filter?.layer ?? null;
+		const agentTenant = filter?.agent_tenant ?? null;
+		const taskType = filter?.task_type ?? null;
+		try {
+			const rows = await this.sql`
+				SELECT *
+				FROM captured_skills
+				WHERE tenant_id = ${this.tenant}
+				  AND (${status}::text IS NULL OR status = ${status})
+				  AND (${layer}::text IS NULL OR layer = ${layer})
+				  AND (${agentTenant}::text IS NULL OR agent_tenant = ${agentTenant})
+				  AND (${taskType}::text IS NULL OR task_type = ${taskType})
+				ORDER BY created_at DESC
+				LIMIT ${cap}
+			`;
+			return rows.map(row => rowToCapturedSkillArtifact(row as Record<string, unknown>));
+		} catch (err) {
+			console.error("listCapturedSkillArtifacts failed:", err instanceof Error ? err.message : "unknown error");
+			return [];
+		}
+	}
+
+	async reviewCapturedSkillArtifact(
+		id: string,
+		status: CapturedSkillArtifact["status"],
+		reviewedBy?: string,
+		reviewNote?: string
+	): Promise<CapturedSkillArtifact> {
+		try {
+			const rows = await this.sql`
+				UPDATE captured_skills
+				SET status = ${status},
+				    reviewed_by = ${reviewedBy ?? null},
+				    review_note = ${reviewNote ?? null},
+				    reviewed_at = NOW(),
+				    updated_at = NOW()
+				WHERE tenant_id = ${this.tenant}
+				  AND id = ${id}
+				RETURNING *
+			`;
+			if (!rows.length) throw new Error("Captured skill artifact not found");
+			return rowToCapturedSkillArtifact(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("reviewCapturedSkillArtifact failed:", err instanceof Error ? err.message : "unknown error");
+			if (err instanceof Error && err.message === "Captured skill artifact not found") {
+				throw err;
+			}
+			throw new Error("Failed to review captured skill artifact");
+		}
+	}
+
+	async getCapturedSkillRegistryHealth(): Promise<CapturedSkillRegistryHealth> {
+		try {
+			const rows = await this.sql`
+				SELECT
+					COUNT(*)::int AS total,
+					COUNT(*) FILTER (WHERE status = 'candidate')::int AS candidate_count,
+					COUNT(*) FILTER (WHERE status = 'accepted')::int AS accepted_count,
+					COUNT(*) FILTER (WHERE status = 'degraded')::int AS degraded_count,
+					COUNT(*) FILTER (WHERE status = 'retired')::int AS retired_count,
+					COUNT(*) FILTER (WHERE layer = 'fixed')::int AS fixed_count,
+					COUNT(*) FILTER (WHERE layer = 'captured')::int AS captured_count,
+					COUNT(*) FILTER (WHERE layer = 'derived')::int AS derived_count,
+					COUNT(*) FILTER (WHERE source_runtime_run_id IS NOT NULL)::int AS with_runtime_provenance,
+					COUNT(*) FILTER (WHERE source_task_id IS NOT NULL)::int AS with_task_provenance,
+					COUNT(*) FILTER (WHERE source_observation_id IS NOT NULL)::int AS with_observation_provenance
+				FROM captured_skills
+				WHERE tenant_id = ${this.tenant}
+			`;
+			const row = rows[0] as Record<string, unknown> | undefined;
+			const candidateCount = (row?.candidate_count as number) ?? 0;
+			return {
+				total: (row?.total as number) ?? 0,
+				by_status: {
+					candidate: candidateCount,
+					accepted: (row?.accepted_count as number) ?? 0,
+					degraded: (row?.degraded_count as number) ?? 0,
+					retired: (row?.retired_count as number) ?? 0
+				},
+				by_layer: {
+					fixed: (row?.fixed_count as number) ?? 0,
+					captured: (row?.captured_count as number) ?? 0,
+					derived: (row?.derived_count as number) ?? 0
+				},
+				with_runtime_provenance: (row?.with_runtime_provenance as number) ?? 0,
+				with_task_provenance: (row?.with_task_provenance as number) ?? 0,
+				with_observation_provenance: (row?.with_observation_provenance as number) ?? 0,
+				pending_review: candidateCount
+			};
+		} catch (err) {
+			console.error("getCapturedSkillRegistryHealth failed:", err instanceof Error ? err.message : "unknown error");
+			return {
+				total: 0,
+				by_status: {
+					candidate: 0,
+					accepted: 0,
+					degraded: 0,
+					retired: 0
+				},
+				by_layer: {
+					fixed: 0,
+					captured: 0,
+					derived: 0
+				},
+				with_runtime_provenance: 0,
+				with_task_provenance: 0,
+				with_observation_provenance: 0,
+				pending_review: 0
+			};
 		}
 	}
 

@@ -494,6 +494,67 @@ export interface Task {
 	completed_at?: string;
 }
 
+export type CapturedSkillStatus = 'candidate' | 'accepted' | 'degraded' | 'retired';
+export type CapturedSkillLayer = 'fixed' | 'captured' | 'derived';
+
+export interface CapturedSkillArtifact {
+	id: string;
+	tenant_id: string;
+	skill_key: string;
+	version: number;
+	layer: CapturedSkillLayer;
+	status: CapturedSkillStatus;
+	name: string;
+	domain?: string;
+	environment?: string;
+	task_type?: string;
+	agent_tenant?: string;
+	source_runtime_run_id?: string;
+	source_task_id?: string;
+	source_observation_id?: string;
+	provenance: Record<string, unknown>;
+	metadata: Record<string, unknown>;
+	review_note?: string;
+	reviewed_by?: string;
+	reviewed_at?: string;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface CapturedSkillArtifactCreate {
+	skill_key: string;
+	layer?: CapturedSkillLayer;
+	status?: CapturedSkillStatus;
+	name: string;
+	domain?: string;
+	environment?: string;
+	task_type?: string;
+	agent_tenant?: string;
+	source_runtime_run_id?: string;
+	source_task_id?: string;
+	source_observation_id?: string;
+	provenance?: Record<string, unknown>;
+	metadata?: Record<string, unknown>;
+}
+
+export interface CapturedSkillArtifactFilter {
+	status?: CapturedSkillStatus;
+	layer?: CapturedSkillLayer;
+	agent_tenant?: string;
+	task_type?: string;
+	limit?: number;
+}
+
+export interface CapturedSkillRegistryHealth {
+	total: number;
+	by_status: Record<CapturedSkillStatus, number>;
+	by_layer: Record<CapturedSkillLayer, number>;
+	with_runtime_provenance: number;
+	with_task_provenance: number;
+	with_observation_provenance: number;
+	pending_review: number;
+}
+
 export type AgentRuntimeTriggerMode = 'schedule' | 'webhook' | 'manual' | 'delegated';
 export type AgentRuntimeSessionStatus = 'active' | 'paused' | 'ended' | 'failed';
 export type AgentRuntimeRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'deferred';

@@ -39,6 +39,10 @@ Sprint 7 closeout and the architecture lock for the next shared-core slice.
 - **Candidate skill-capture stub** — successful admitted trigger wakes can emit `skill_candidate` observations in `craft` as reviewable autonomous-skill hypotheses.
 - **Runtime usage diagnostics** — storage/runtime health now expose day-window duty/impulse counters and policy snapshot.
 - **Runtime unit coverage** — `test/runtime-v2.spec.ts` now validates policy writes plus impulse defer gating, alongside session/run/trigger paths.
+- **Captured Skill Registry schema** — `013_captured_skill_registry.sql` adds versioned `captured_skills` artifacts with lifecycle states (`candidate`, `accepted`, `degraded`, `retired`) and layer taxonomy (`fixed`, `captured`, `derived`).
+- **`mind_skill` (v2)** — captured-skill registry tool with list/get/review flow for promotion and lifecycle updates.
+- **Runtime→skill provenance capture** — admitted trigger runs now persist captured skill artifacts linked to runtime run id, task id, and optional skill-candidate observation id.
+- **Skill registry health diagnostics** — `mind_health section=skills` surfaces state/layer distribution, pending-review count, provenance coverage, and recent candidates.
 
 ### Changed
 - **Cross-tenant task lifecycle** — assignees can now get/update/complete delegated tasks through storage paths that explicitly allow assigned-task access.
@@ -65,6 +69,7 @@ Sprint 7 closeout and the architecture lock for the next shared-core slice.
 - **Runner option parity** — `scripts/runtime-autonomous-wake.sh` now forwards `EMIT_SKILL_CANDIDATE` to `/runtime/trigger` (default duty=true, impulse=false).
 - **Storage typing baseline** — transaction callback typing in Postgres storage now compiles cleanly under current postgres.js typings (`npx tsc --noEmit` green).
 - **Sprint 8 checklist state** — S8.5 now marked complete via emitted skill-candidate artifacts; S8.6 remains the final proof gate.
+- **Candidate capture hardening for Sprint 9** — runtime skill-candidate observations remain, but now also create first-class captured-skill records for reviewed promotion flow.
 
 ### Developer Notes
 - Verification command: `npx vitest run --config vitest.unit.config.mts test/tasks-v2.spec.ts test/project-dossiers.spec.ts test/wake-delta.spec.ts test/phase2a-calibration.spec.ts`

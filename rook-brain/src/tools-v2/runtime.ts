@@ -8,7 +8,8 @@ import type {
 	AgentRuntimePolicy,
 	AgentRuntimeUsage,
 	Task,
-	Observation
+	Observation,
+	CapturedSkillArtifact
 } from "../types";
 import { generateId, getTimestamp } from "../helpers";
 import type { ToolContext } from "./context";
@@ -310,7 +311,7 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 					}
 					const includeAssigned = args.include_assigned ?? true;
 					const autoClaimTask = args.auto_claim_task ?? false;
-					const emitSkillCandidate = args.emit_skill_candidate ?? (wakeKind === "duty");
+					const emitSkillCandidate = args.emit_skill_candidate ?? false;
 					const enforcePolicy = args.enforce_policy ?? true;
 
 					const metadataResult = normalizeMetadata(args.metadata);
@@ -378,23 +379,6 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 								? `Impulse wake admitted (${policy.execution_mode} mode, ${usage.impulse_runs + 1}/${policy.impulse_wake_budget} impulse wakes today).`
 								: `Duty wake admitted (${effectiveTriggerMode}) and opened ${dueOpened} due scheduled task${dueOpened === 1 ? "" : "s"}${claimedTask ? `; claimed ${claimedTask.id}` : ""}.`
 					);
-					let skillCandidate: Observation | undefined;
-					let skillCandidateError: string | undefined;
-					if (!deferred && selectedTask && emitSkillCandidate) {
-						try {
-							skillCandidate = await emitSkillCandidateArtifact(
-								storage,
-								agentTenant,
-								wakeKind,
-								effectiveTriggerMode,
-								policy,
-								selectedTask,
-								summary
-							);
-						} catch (err) {
-							skillCandidateError = err instanceof Error ? err.message : "Failed to emit skill candidate";
-						}
-					}
 					const completedAt = new Date().toISOString();
 
 					const run = await storage.createAgentRuntimeRun({
@@ -427,21 +411,55 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 							usage_window_start: usage.since,
 							policy_enforced: enforcePolicy,
 							deferred,
-								defer_reasons: deferReasons,
-								auto_claim_task_requested: autoClaimTask,
-								auto_claim_task_success: claimedTask != null,
-								auto_claim_task_error: claimError,
-								emit_skill_candidate_requested: emitSkillCandidate,
-								emit_skill_candidate_success: skillCandidate != null,
-								emit_skill_candidate_error: skillCandidateError,
-								skill_candidate_id: skillCandidate?.id,
-								recommended_task_id: recommendedTask?.id,
-								claimed_task_id: claimedTask?.id,
-								claimed_task_delegated: claimedTask ? isDelegatedTaskForAgent(claimedTask, agentTenant) : false,
+							defer_reasons: deferReasons,
+							auto_claim_task_requested: autoClaimTask,
+							auto_claim_task_success: claimedTask != null,
+							auto_claim_task_error: claimError,
+							emit_skill_candidate_requested: emitSkillCandidate,
+							recommended_task_id: recommendedTask?.id,
+							claimed_task_id: claimedTask?.id,
+							claimed_task_delegated: claimedTask ? isDelegatedTaskForAgent(claimedTask, agentTenant) : false,
 							resolved_session_id: resolvedSessionId,
 							session_source: sessionSource
 						}
 					});
+
+					let skillCandidate: Observation | undefined;
+					let skillCandidateError: string | undefined;
+					let capturedSkill: CapturedSkillArtifact | undefined;
+					let capturedSkillError: string | undefined;
+
+					if (!deferred && selectedTask && emitSkillCandidate) {
+						try {
+							skillCandidate = await emitSkillCandidateArtifact(
+								storage,
+								agentTenant,
+								wakeKind,
+								effectiveTriggerMode,
+								policy,
+								selectedTask,
+								summary
+							);
+						} catch (err) {
+							skillCandidateError = err instanceof Error ? err.message : "Failed to emit skill candidate observation";
+						}
+
+						try {
+							capturedSkill = await emitCapturedSkillArtifact(
+								storage,
+								run.id,
+								agentTenant,
+								wakeKind,
+								effectiveTriggerMode,
+								policy,
+								selectedTask,
+								summary,
+								skillCandidate?.id
+							);
+						} catch (err) {
+							capturedSkillError = err instanceof Error ? err.message : "Failed to persist captured skill artifact";
+						}
+					}
 
 					let session: AgentRuntimeSession | undefined;
 					if (resolvedSessionId) {
@@ -475,14 +493,16 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 						usage,
 						resolved_session_id: resolvedSessionId,
 						session_source: sessionSource,
-							defer_reasons: deferReasons,
-							recommended_task: recommendedTask,
-							claimed_task: claimedTask,
-							claim_error: claimError,
-							skill_candidate: skillCandidate,
-							skill_candidate_error: skillCandidateError,
-							runner_contract: {
-								should_run: !deferred && selectedTask != null,
+						defer_reasons: deferReasons,
+						recommended_task: recommendedTask,
+						claimed_task: claimedTask,
+						claim_error: claimError,
+						skill_candidate: skillCandidate,
+						skill_candidate_error: skillCandidateError,
+						captured_skill: capturedSkill,
+						captured_skill_error: capturedSkillError,
+						runner_contract: {
+							should_run: !deferred && selectedTask != null,
 							resume_session_id: resolvedSessionId,
 							task: selectedTask,
 							prompt: selectedTask ? buildAutonomousTaskPrompt(selectedTask, agentTenant, wakeKind, policy) : undefined
@@ -740,6 +760,58 @@ async function emitSkillCandidateArtifact(
 
 	await storage.appendToTerritory("craft", artifact);
 	return artifact;
+}
+
+async function emitCapturedSkillArtifact(
+	storage: ToolContext["storage"],
+	runtimeRunId: string,
+	agentTenant: string,
+	wakeKind: WakeKind,
+	triggerMode: AgentRuntimeSession["trigger_mode"],
+	policy: AgentRuntimePolicy,
+	task: Task,
+	summary: string,
+	observationId?: string
+): Promise<CapturedSkillArtifact> {
+	const skillKey = buildCapturedSkillKey(agentTenant, task);
+	const taskType = cleanText(task.source) ?? "runtime_trigger";
+	const delegated = isDelegatedTaskForAgent(task, agentTenant);
+
+	return storage.createCapturedSkillArtifact({
+		skill_key: skillKey,
+		layer: "captured",
+		status: "candidate",
+		name: `Autonomous ${task.title}`,
+		domain: "autonomous-runtime",
+		environment: policy.execution_mode,
+		task_type: taskType,
+		agent_tenant: agentTenant,
+		source_runtime_run_id: runtimeRunId,
+		source_task_id: task.id,
+		source_observation_id: observationId,
+		provenance: {
+			wake_kind: wakeKind,
+			trigger_mode: triggerMode,
+			policy_mode: policy.execution_mode,
+			delegated,
+			run_summary: summary
+		},
+		metadata: {
+			origin: "mind_runtime.trigger",
+			task_title: task.title,
+			task_priority: task.priority
+		}
+	});
+}
+
+function buildCapturedSkillKey(agentTenant: string, task: Task): string {
+	const seed = cleanText(task.title) ?? task.id;
+	const slug = seed
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "")
+		.slice(0, 80);
+	return `captured:${agentTenant}:${slug || task.id}`;
 }
 
 function toStartOfUtcDay(iso: string): string {

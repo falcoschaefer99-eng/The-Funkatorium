@@ -1,6 +1,6 @@
 // ============ TOOLS V2 — BARREL ============
 // Aggregates all TOOL_DEFS and dispatches executeTool(name, args, context).
-// 15 files → ~34 tools (collapsed from ~50 old tools via action dispatch pattern).
+// 16 files → ~35 tools (collapsed from ~50 old tools via action dispatch pattern).
 
 import type { ToolContext } from "./context";
 
@@ -22,6 +22,7 @@ import { TOOL_DEFS as healthDefs, handleTool as handleHealth } from "./health";
 import { TOOL_DEFS as timelineDefs, handleTool as handleTimeline } from "./timeline";
 import { TOOL_DEFS as tasksDefs, handleTool as handleTasks } from "./tasks";
 import { TOOL_DEFS as runtimeDefs, handleTool as handleRuntime } from "./runtime";
+import { TOOL_DEFS as skillDefs, handleTool as handleSkill } from "./skills";
 
 // ============ AGGREGATED TOOL DEFINITIONS ============
 
@@ -43,7 +44,8 @@ export const TOOL_DEFS = [
 	...healthDefs,
 	...timelineDefs,
 	...tasksDefs,
-	...runtimeDefs
+	...runtimeDefs,
+	...skillDefs
 ];
 
 // ============ TOOL DISPATCH TABLE ============
@@ -109,7 +111,10 @@ const TOOL_MODULES: Record<string, (name: string, args: any, context: ToolContex
 	mind_task: handleTasks,
 
 	// Autonomous Runtime (Sprint 8)
-	mind_runtime: handleRuntime
+	mind_runtime: handleRuntime,
+
+	// Captured Skill Registry (Sprint 9)
+	mind_skill: handleSkill
 };
 
 // ============ EXECUTE TOOL ============

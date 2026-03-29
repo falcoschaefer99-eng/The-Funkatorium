@@ -40,7 +40,11 @@ import type {
 	AgentRuntimeSession,
 	AgentRuntimeRun,
 	AgentRuntimePolicy,
-	AgentRuntimeUsage
+	AgentRuntimeUsage,
+	CapturedSkillArtifact,
+	CapturedSkillArtifactCreate,
+	CapturedSkillArtifactFilter,
+	CapturedSkillRegistryHealth
 } from "../types";
 
 // ============ FILTER / QUERY TYPES ============
@@ -471,6 +475,28 @@ export interface IBrainStorage {
 
 	/** Get a single task by ID. When includeAssigned is true, also returns tasks assigned to this tenant from other tenants. */
 	getTask(id: string, includeAssigned?: boolean): Promise<Task | null>;
+
+	// --- Captured Skill Registry (Sprint 9) ---
+
+	/** Create a captured skill artifact candidate/version from runtime/task provenance. */
+	createCapturedSkillArtifact(artifact: CapturedSkillArtifactCreate): Promise<CapturedSkillArtifact>;
+
+	/** Fetch one captured skill artifact by id. */
+	getCapturedSkillArtifact(id: string): Promise<CapturedSkillArtifact | null>;
+
+	/** List captured skill artifacts with optional status/layer/provenance filters. */
+	listCapturedSkillArtifacts(filter?: CapturedSkillArtifactFilter): Promise<CapturedSkillArtifact[]>;
+
+	/** Review/publish lifecycle state changes (candidate→accepted, accepted→degraded/retired, etc). */
+	reviewCapturedSkillArtifact(
+		id: string,
+		status: CapturedSkillArtifact["status"],
+		reviewedBy?: string,
+		reviewNote?: string
+	): Promise<CapturedSkillArtifact>;
+
+	/** Aggregate captured skill health diagnostics for status/layer/provenance coverage. */
+	getCapturedSkillRegistryHealth(): Promise<CapturedSkillRegistryHealth>;
 
 	// --- Autonomous Runtime (Sprint 8) ---
 
