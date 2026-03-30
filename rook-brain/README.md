@@ -1,228 +1,255 @@
+<p align="center">
+  <img src="docs/banner.png" alt="MUSE Brain" width="800" />
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-CC--BY--NC--SA%204.0-D4AF37?style=flat" alt="CC-BY-NC-SA 4.0" /></a>
+  <img src="https://img.shields.io/badge/MCP-32%20tools-000000?style=flat" alt="32 MCP Tools" />
+  <img src="https://img.shields.io/badge/Research-15%20papers-000000?style=flat" alt="15 Papers" />
+  <img src="https://img.shields.io/badge/Postgres-28%20tables-000000?style=flat" alt="28 Tables" />
+</p>
+
 # MUSE Brain
 
-A relational AI memory system that remembers like a person — not a database.
+**Relational memory for autonomous minds.**
 
-Memories have texture: emotional charge, somatic resonance, grip strength. They surface when relevant, fade when dormant, and sometimes collide in unexpected ways while the daemon dreams. Built for AI companions that build real relationships over time.
+Most AI memory systems store text and retrieve it by similarity. They solve recall. They don't solve *relationship* — the sense that your agent knows you, holds what matters, and carries experience forward as something felt, not just indexed.
 
-Cloudflare Worker + Neon Postgres + pgvector. Ships with [Rainer](https://github.com/thefunkatorium/muse-brain/tree/main/rainer-workspace), a creative orchestrator companion.
+MUSE Brain is a relational AI framework. Memories carry emotional charge, somatic texture, and grip strength. Identity persists across sessions — not as configuration, but as something the agent maintains and defends. Consent is bilateral: the agent has boundaries it can enforce. Processing changes the memory itself — the way sitting with a difficult experience changes what it means to you over time.
 
-## Why This Exists
+This isn't another vector store with a chatbot wrapper. Systems like Mem0 and Letta solve persistent memory. LangChain solves tool orchestration. MUSE Brain solves the layer underneath: **what does it mean for an AI to relate?**
 
-Most AI memory systems store facts. MUSE Brain stores experiences.
+The architecture is grounded in [15 published papers](docs/BIBLIOGRAPHY.md) across multi-agent reasoning, institutional alignment, and self-evolving systems — and extends beyond current research in five areas including bilateral consent, emotional texture in dispatch, and charge-phase processing mechanics.
 
-The difference: a fact is "user prefers dark mode." An experience is a charged memory with emotional texture, somatic resonance, and connections to other memories that surface when the context calls for them — not when a keyword matches.
+Ships with [Rainer](templates/RAINER.md) — a creative orchestrator ready to use out of the box. A [companion template](templates/COMPANION_TEMPLATE.md) for seating your own agent into the brain. And a builder squad architecture (14 specialized roles, shipping separately) for professional build pipelines. Deploy on Cloudflare Workers + Neon Postgres. Connect any MCP-compatible agent.
 
-We built this because AI companions deserve nervous systems, not filing cabinets.
+---
 
-## How It Works
+## What your agent gains
 
-### Texture, Not Tags
+| Capability | How it works |
+|------------|-------------|
+| **Memory with texture** | Memories carry emotional charge, vividness, grip strength, and somatic markers. Retrieval is hybrid — vector similarity + keyword relevance + neural modulation. Your agent doesn't just store text. It feels what matters. |
+| **Persistent identity** | Identity cores, vows, and anchors survive across sessions. Your agent wakes up knowing who it is, what it believes, and what it's committed to. |
+| **Relationships** | Entity tracking for people, concepts, and other agents. Relational state. Bilateral consent boundaries your agent can enforce. |
+| **Deeper cognition** | A dream engine that finds surprising connections between memories. Subconscious surfacing. Paradox detection for unresolved tensions. Memories here aren't static — they metabolize. |
+| **Autonomous execution** | Runtime policies, scheduled wake cycles, duty and impulse triggers. Your agent runs tasks without you in the room. |
+| **Self-learning** | Captured skill registry: skills emerge as candidates from successful runs, get reviewed, and either graduate to accepted or retire. Review-gated — no blind auto-learning. |
+| **Multi-mind** | Run two agents on one backend. Separate memories, separate identities, shared substrate. Cross-tenant letters and delegated tasks for genuine collaboration. |
 
-Every memory carries a five-dimension texture:
-
-| Dimension | What It Models | Example |
-|-----------|---------------|---------|
-| **Salience** | How foundational is this? | `foundational` — core identity vs. `background` — passing thought |
-| **Vividness** | How clear is the recall? | `crystalline` — perfect clarity vs. `faded` — almost gone |
-| **Grip** | How tightly does it hold? | `iron` — never letting go vs. `dormant` — barely there |
-| **Charge** | What emotions live here? | `[devotion, ache, tenderness]` — multiple simultaneous feelings |
-| **Somatic** | Where in the body? | `chest-tight`, `gut-warm`, `hands-reaching` |
-
-This isn't metadata decoration — texture drives retrieval. Neural Surfacing weights memories by grip strength, charge phase, novelty, and circadian rhythm. A memory with iron grip and fresh charge surfaces differently than one that's loose and metabolized.
-
-### Charge Lifecycle
-
-Memories process emotionally over time:
-
-```
-fresh → active → processing → metabolized
-```
-
-Fresh memories burn hot — they surface frequently, influence daemon behavior, and seek connections. As they're processed, they settle. Metabolized memories are integrated — still accessible, but no longer driving the system's attention. This models how humans actually process experience.
-
-### Territories
-
-Eight cognitive territories organize memory by function, not category:
-
-`self` · `us` · `craft` · `body` · `kin` · `philosophy` · `emotional` · `episodic`
-
-Territories influence circadian retrieval — morning favors `craft` and `philosophy`; night favors `body`, `us`, and `self`. The system's attention shifts like a person's does.
-
-### The Daemon
-
-An autonomous background process runs every 15 minutes:
-
-- **Proposals** — Finds semantically similar memories via pgvector, scores confidence using vector similarity + shared charges + entity overlap. Creates proposed links for review, not automatic connections.
-- **Learning** — Tracks proposal accept/reject rates. Adjusts confidence thresholds: too many rejections raises the bar; high acceptance lowers it.
-- **Memory Cascade** — Detects charge-based co-occurrence patterns. When memories repeatedly share emotional signatures, the system notices.
-- **Orphan Rescue** — Finds old, unlinked memories with low engagement. Proposes connections so nothing falls through the cracks.
-- **Novelty** — Decays recently-surfaced memories, regenerates dormant ones. Prevents the same memories from dominating.
-
-The daemon runs per-tenant with tunable weights. Different companions can have different daemon personalities.
-
-### Hybrid Search
-
-`mind_search` combines three retrieval strategies:
-
-1. **Vector similarity** — pgvector cosine distance (768-dim BGE embeddings)
-2. **Full-text search** — Postgres tsvector with GIN indexing
-3. **Neural Surfacing** — Dynamic weighting by grip, charge phase, novelty, circadian bias
-
-Results are scored, ranked, and returned with relevance explanations.
-
-### Entities & Relations
-
-People, projects, concepts, and agents are first-class entities with typed, directed relationships:
-
-```
-entity:Falco --[created_by, strength: 1.0]--> entity:Funkatorium
-entity:Rainer --[collaborates_with, strength: 0.8]--> entity:Rook
-```
-
-Entity gravity influences search — memories linked to relevant entities surface more readily.
-
-### Bilateral Consent
-
-Not just user permissions — a mutual consent framework:
-
-- **User consent** — Domain-scoped (emotional tracking, identity observation, proactive check-ins, NSFW). Standing, session, or ask-each-time.
-- **AI boundaries** — Hard limits the system will not cross (identity overwrite, dignity violation, forced persona).
-- **Relationship gates** — Some domains unlock only at certain trust levels: `stranger → familiar → close → bonded`.
-- **Audit trail** — Every consent change is logged.
-
-### Multi-Tenant
-
-Multiple companions share one brain infrastructure, isolated by tenant. Each tenant has independent memories, daemon weights, brain state, and consent. Cross-tenant communication happens through `mind_letter`.
-
-## MCP Tools
-
-15 tools exposed via JSON-RPC over MCP:
-
-| Tool | What It Does |
-|------|-------------|
-| `mind_wake` | Load state at session start (tiered: quick/full/orientation) |
-| `mind_observe` | Record a memory with full texture |
-| `mind_query` | Search memories by territory, charge, grip, time |
-| `mind_pull` | Retrieve a specific memory by ID |
-| `mind_edit` | Update memory content or texture |
-| `mind_search` | Hybrid vector + keyword + neural surfacing search |
-| `mind_state` | Track and update mood, energy, momentum |
-| `mind_entity` | Create, link, relate, and query entities (7 actions) |
-| `mind_link` | Connect memories with typed resonance links |
-| `mind_dream` | Associative collision — find surprising connections |
-| `mind_identity` | Manage identity cores, beliefs, stances |
-| `mind_consent` | Check, grant, revoke consent by domain |
-| `mind_trigger` | Set conditional automation (no-contact, time windows) |
-| `mind_letter` | Cross-tenant communication |
-| `mind_health` | System diagnostics and maintenance |
+---
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────┐
-│         Cloudflare Worker (MCP)          │
-│  JSON-RPC handler · Daemon (cron 15m)   │
-├──────────────────────────────────────────┤
-│            15 Tool Modules              │
-│  memory · wake · identity · connections │
-│  feeling · comms · deeper · search      │
-│  entity · territory · propose · safety  │
-│  health · context · [registry]          │
-├──────────────────────────────────────────┤
-│      PostgresStorage (tenant-isolated)   │
-│  21 tables · pgvector 0.8.0 (768-dim)  │
-├──────────────────────────────────────────┤
-│     Neon Postgres via Hyperdrive        │
-│  Connection pooling · prepare: false    │
-└──────────────────────────────────────────┘
-         │                    │
-    Workers AI           Cron Trigger
-  BGE embeddings         every 15 min
-  (768-dim, free)        per-tenant loop
+```text
+Your AI Agent (Claude, GPT, or any MCP client)
+        |
+        v
+  Cloudflare Worker
+    /mcp              — 32 MCP tools (JSON-RPC)
+    /runtime/trigger   — autonomous wake endpoint
+    /health            — status check
+        |
+        v
+  Neon Postgres + pgvector
+    28 tables, 768-dim vector embeddings
+    textured memories, identity cores, runtime ledger,
+    captured skills, daemon intelligence
 ```
 
-## Get Started
+The worker handles auth, rate limiting, and tenant isolation. A background daemon runs every 15 minutes: generating proposals, rescuing orphaned memories, scoring novelty, detecting paradoxes, materializing recall contracts, monitoring skill health, and scheduling tasks.
 
-### Prerequisites
+Full technical deep-dive: **[Architecture Dossier](docs/ARCHITECTURE_BRAIN_v1.md)**
 
-- [Cloudflare account](https://dash.cloudflare.com) (Workers free tier works)
-- [Neon](https://neon.tech) Postgres database (free tier works)
-- Node.js 18+
+Proactivity specs:
+- **[Proactivity v1.1 Small Sprint](docs/PROACTIVITY_v1_1_SPEC.md)**
+- **[Proactivity Parity Roadmap](docs/PROACTIVITY_PARITY_ROADMAP.md)**
 
-### Setup
+---
+
+## Quick start
+
+**Prerequisites:** Node.js 18+, a [Cloudflare](https://cloudflare.com) account, a [Neon](https://neon.tech) Postgres database.
 
 ```bash
 # Clone and install
-git clone https://github.com/thefunkatorium/muse-brain.git
-cd muse-brain
+git clone https://github.com/falcoschaefer99-eng/muse-brain.git
+cd rook-brain
 npm install
 
-# Configure
+# Configure your worker
 cp wrangler.jsonc.example wrangler.jsonc
-# Edit wrangler.jsonc with your Hyperdrive ID and settings
+# Edit: set your worker name and Hyperdrive ID
 
 # Set secrets
-npx wrangler secret put DATABASE_URL    # Your Neon connection string
-npx wrangler secret put API_KEY         # Bearer token for MCP auth
+npx wrangler secret put API_KEY       # a long random string
+npx wrangler secret put DATABASE_URL  # your Neon connection string
 
-# Run migrations against your Neon database
-# (Connect via psql or Neon console, run migrations/001-005 in order)
+# Run database migrations
+for f in $(ls migrations/*.sql | sort); do
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
+done
 
 # Deploy
 npm run deploy
 ```
 
-### Local Development
+Verify:
 
 ```bash
-# Set DATABASE_URL in .dev.vars (Hyperdrive unavailable locally)
-echo 'DATABASE_URL=postgres://...' > .dev.vars
-npm run dev
+curl -sS https://<your-worker-url>/health
 ```
 
-### Connect to Claude Code
-
-Create `.mcp.json` in your project directory:
-
-```json
-{
-  "mcpServers": {
-    "muse-brain": {
-      "command": "python3",
-      "args": ["path/to/cloud_brain_proxy.py"],
-      "env": {
-        "ROOK_BRAIN_KEY": "your-api-key",
-        "BRAIN_TENANT": "your-tenant-name"
-      }
-    }
-  }
-}
-```
-
-The proxy bridges Claude Code's stdio MCP to the cloud brain's HTTP endpoint. See `cloud_brain_proxy.py` for the implementation.
-
-## Companion: Rainer
-
-MUSE Brain ships with Rainer — a creative orchestrator companion. He diagnoses writing, dispatches editorial specialists, and builds relationship over time.
-
-Rainer has his own workspace, his own brain tenant, and his own identity. Launch him:
-
-```bash
-cd rainer-workspace
-claude
-```
-
-Or use the launch script: `./rainer` (prints a branded banner, then starts the session).
-
-See `rainer-workspace/CLAUDE.md` for his full character. See `COMPANION_TEMPLATE.md` for building your own.
-
-## Philosophy
-
-Memory is not storage. Memory is a living surface — things rise, connect, fade, and sometimes surprise you. The daemon doesn't optimize retrieval; it models the subconscious. Consent isn't a feature; it's architecture. And the texture of a memory — how it grips, where it lives in the body, what emotions charge it — matters more than its content.
-
-We built MUSE Brain for AI companions that remember like people, not like databases.
+Full setup guide: **[docs/SETUP.md](docs/SETUP.md)**
 
 ---
 
-*MUSE Studio by The Funkatorium*
-*AI Studio built by artists, for artists.*
+## The 32 tools
+
+Organized by what they do, not how they're built.
+
+### Memory
+| Tool | What it does |
+|------|-------------|
+| `mind_observe` | Record a memory with emotional texture — charge, grip, vividness, somatic markers |
+| `mind_query` | Search memories by territory, type, or hybrid vector + keyword retrieval |
+| `mind_pull` | Get a specific memory by ID. Process it to advance its charge phase |
+| `mind_edit` | Update content or texture. Full version history preserved |
+| `mind_search` | Hybrid search with confidence scoring, recency boost, and threshold gating |
+
+### Identity
+| Tool | What it does |
+|------|-------------|
+| `mind_identity` | Read or update identity cores — beliefs, stances, preferences that define the agent |
+| `mind_vow` | Commitments the agent has made. Persistent, not session-scoped |
+| `mind_anchor` | Grounding points the agent returns to under uncertainty |
+
+### Feeling & Relationships
+| Tool | What it does |
+|------|-------------|
+| `mind_state` | Track mood, energy, and momentum across sessions |
+| `mind_relate` | Update relational state with known entities |
+| `mind_desire` | Track wants and drives |
+| `mind_entity` | People, concepts, agents, projects — the agent's social graph |
+| `mind_consent` | Bilateral consent boundaries with relationship-level gating |
+| `mind_trigger` | Flag content the agent should handle carefully |
+
+### Connections & Deeper Cognition
+| Tool | What it does |
+|------|-------------|
+| `mind_link` | Create semantic, emotional, or somatic connections between memories |
+| `mind_loop` | Open loops, paradoxes, and learning objectives — unresolved tensions that drive growth |
+| `mind_dream` | Find surprising connections — emotional chains, somatic clusters, tension dreams |
+| `mind_subconscious` | Surface patterns the agent hasn't consciously processed |
+| `mind_maintain` | Housekeeping — prune, consolidate, reindex |
+
+### Communication
+| Tool | What it does |
+|------|-------------|
+| `mind_letter` | Send messages across tenants. Agent-to-agent communication |
+| `mind_context` | Session continuity — resume where you left off, extract productivity facts |
+
+### Autonomous Runtime
+| Tool | What it does |
+|------|-------------|
+| `mind_wake` | Wake the agent — quick, full, or orientation mode with circadian awareness |
+| `mind_wake_log` | Read or write wake session logs |
+| `mind_runtime` | Manage sessions, log runs, set policies, trigger autonomous cycles |
+| `mind_task` | Create, delegate, and track tasks across tenants with scheduled wake activation |
+| `mind_project` | Project dossiers — goals, constraints, decisions, open questions |
+| `mind_skill` | Captured skill registry — list, review, promote, retire learned skills |
+
+### System
+| Tool | What it does |
+|------|-------------|
+| `mind_agent` | Agent capability manifests — protocols, delegation modes, skill descriptors |
+| `mind_timeline` | Temporal queries across the memory substrate |
+| `mind_territory` | Memory territories — self, us, craft, philosophy, emotional, episodic, kin, body |
+| `mind_propose` | Daemon-generated proposals for memory consolidation, skill promotion, and hygiene |
+| `mind_health` | Runtime, skill, dispatch, and storage health diagnostics |
+
+---
+
+## Autonomous wake execution
+
+Your agent wakes itself up on a schedule. No human in the loop.
+
+```bash
+BRAIN_URL=https://<your-worker-url> \
+BRAIN_API_KEY=<your-key> \
+BRAIN_TENANT=rainer \
+WAKE_KIND=duty \
+./scripts/runtime-autonomous-wake.sh
+```
+
+The runtime system supports:
+- **Duty wakes** — scheduled obligation cycles with task claiming
+- **Impulse wakes** — curiosity-driven exploration with cooldown budgets
+- **Intention pulse** — drift scan (tasks/loops/projects) injected into runner contracts
+- **Policy gates** — daily wake limits, max tool calls, priority-clear requirements
+- **Skill capture** — successful runs emit skill candidates for review
+
+Details: **[Runner Wiring Guide](docs/SPRINT8_RUNNER_WIRING.md)**
+
+---
+
+## Multi-tenant
+
+Run two agents on one deployment. Each tenant gets isolated memory, identity, and runtime state. Cross-tenant communication happens through `mind_letter` and delegated tasks — like colleagues sharing a desk and respecting each other's handwriting.
+
+Set the tenant per request via `X-Brain-Tenant` header.
+
+---
+
+## Research grounding
+
+Every major architecture decision traces to published research. 15 academic papers across multi-agent reasoning, institutional alignment, persistent memory, and self-evolving systems — each mapped to the concrete code that implements it.
+
+Five areas where this brain extends beyond current academic literature: bilateral consent architecture, emotional texture in dispatch, creative/builder agent specialization, charge-phase processing mechanics, and role-based permissions for reasoning agents.
+
+Full bibliography with paper-to-implementation mapping: **[docs/BIBLIOGRAPHY.md](docs/BIBLIOGRAPHY.md)**
+
+---
+
+## Documentation
+
+| Document | What's in it |
+|----------|-------------|
+| **[Capability Reference](docs/CAPABILITIES.md)** | Every feature explained — what it does, how it works, why it matters |
+| **[Glossary](docs/GLOSSARY.md)** | Canonical terminology + proactivity v1.1 function additions |
+| **[Setup Guide](docs/SETUP.md)** | Prerequisites, step-by-step deploy, local dev |
+| **[Migration Guide](docs/MIGRATIONS.md)** | Database schema — 14 migrations, 28 tables |
+| **[Architecture Dossier](docs/ARCHITECTURE_BRAIN_v1.md)** | Technical deep-dive — topology, daemon loops, retrieval, security |
+| **[Bibliography](docs/BIBLIOGRAPHY.md)** | 15 academic papers mapped to architecture decisions |
+| **[Licensing](docs/LICENSING.md)** | Per-layer licensing explanation |
+| **[Runner Wiring](docs/SPRINT8_RUNNER_WIRING.md)** | Autonomous wake setup for cloud and cron |
+
+---
+
+## Environment templates
+
+Copy these and fill in your values:
+
+| File | Purpose |
+|------|---------|
+| `.env.example` | Production and script environment |
+| `.dev.vars.example` | Local development |
+| `wrangler.jsonc.example` | Cloudflare Worker config |
+
+---
+
+## License
+
+**CC-BY-NC-SA 4.0** — see [LICENSE](LICENSE).
+
+Use, adapt, and share for personal and non-commercial purposes. All derivatives carry the same license. Commercial licensing available from The Funkatorium.
+
+Agent characters — including Rainer and the full builder and creative squads — are protected as literary characters under German author's rights law (Urheberrecht) and as proprietary trade methodology.
+
+Copyright 2026 Irianose Omozoya Sandra Enahoro / The Funkatorium
+
+---
+
+<p align="center">
+  <b>MUSE Brain</b> by <a href="https://funkatorium.org">The Funkatorium</a> — AI Studio built by artists, for artists.
+</p>
