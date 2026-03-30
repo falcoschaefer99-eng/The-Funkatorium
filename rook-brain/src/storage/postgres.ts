@@ -2658,7 +2658,6 @@ export class PostgresBrainStorage implements IBrainStorage {
 				SELECT proposal_type, source_id, target_id
 				FROM daemon_proposals
 				WHERE tenant_id = ${this.tenant}
-				  AND status = 'pending'
 				  AND (proposal_type, source_id, target_id) IN (
 				      SELECT unnest(${types}::text[]), unnest(${sources}::text[]), unnest(${targets}::text[])
 				  )

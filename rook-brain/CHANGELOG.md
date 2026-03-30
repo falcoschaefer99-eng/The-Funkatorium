@@ -43,6 +43,13 @@ Sprint 7 closeout and the architecture lock for the next shared-core slice.
 - **`mind_skill` (v2)** — captured-skill registry tool with list/get/review flow for promotion and lifecycle updates.
 - **Runtime→skill provenance capture** — admitted trigger runs now persist captured skill artifacts linked to runtime run id, task id, and optional skill-candidate observation id.
 - **Skill registry health diagnostics** — `mind_health section=skills` surfaces state/layer distribution, pending-review count, provenance coverage, and recent candidates.
+- **Skill-health daemon task (Sprint 10 kickoff)** — new `skill-health` cycle proposes review-gated lifecycle actions from captured skill drift:
+  - `skill_recapture` for stale accepted skills
+  - `skill_supersession` when newer candidate versions outpace accepted lineage
+  - `skill_promotion` for promotable candidate-only lineages
+- **Skill proposal taxonomy expanded** — `mind_propose action=list` now supports `skill_recapture`, `skill_supersession`, and `skill_promotion`.
+- **Captured-skill browse index** — `014_captured_skill_registry_perf.sql` adds `(tenant_id, created_at DESC)` index for no-filter registry listing.
+- **Skill-health unit coverage** — `test/skill-health-daemon.spec.ts` validates proposal generation + dedupe and fresh-candidate suppression.
 
 ### Changed
 - **Cross-tenant task lifecycle** — assignees can now get/update/complete delegated tasks through storage paths that explicitly allow assigned-task access.

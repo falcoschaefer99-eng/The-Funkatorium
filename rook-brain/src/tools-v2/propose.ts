@@ -1,6 +1,6 @@
 // ============ PROPOSE TOOL (v2) ============
 // mind_propose — review and manage daemon-generated proposals.
-// action=list: list pending proposals (filterable by type)
+// action=list: list pending proposals (filterable by type, including skill lifecycle proposals)
 // action=review: accept or reject. Accept + link → create bidirectional link.
 //   Accept + orphan_rescue + archive → metabolize + update orphan status.
 //   Accept + orphan_rescue (rescue) → create link + update orphan status.
@@ -15,7 +15,7 @@ import type { ToolContext } from "./context";
 export const TOOL_DEFS = [
 	{
 		name: "mind_propose",
-		description: "Review and manage daemon-generated proposals. action=list: see pending proposals (types: link, orphan_rescue, consolidation, dedup, cross_agent, cross_tenant, paradox_detected). action=review: accept or reject a proposal (link → bidirectional link; orphan_rescue → rescue or archive; consolidation → skill observation + metabolize sources). action=stats: acceptance statistics.",
+		description: "Review and manage daemon-generated proposals. action=list: see pending proposals (types: link, orphan_rescue, consolidation, dedup, cross_agent, cross_tenant, paradox_detected, skill_recapture, skill_supersession, skill_promotion). action=review: accept or reject a proposal (link → bidirectional link; orphan_rescue → rescue or archive; consolidation → skill observation + metabolize sources). action=stats: acceptance statistics.",
 		inputSchema: {
 			type: "object",
 			properties: {
@@ -27,7 +27,7 @@ export const TOOL_DEFS = [
 				// list params
 				type: {
 					type: "string",
-					enum: ["link", "orphan_rescue", "consolidation", "dedup", "cross_agent", "cross_tenant", "paradox_detected"],
+					enum: ["link", "orphan_rescue", "consolidation", "dedup", "cross_agent", "cross_tenant", "paradox_detected", "skill_recapture", "skill_supersession", "skill_promotion"],
 					description: "[list] Filter by proposal type"
 				},
 				status: {

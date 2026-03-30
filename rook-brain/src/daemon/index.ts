@@ -1,6 +1,6 @@
 // ============ DAEMON ORCHESTRATOR (Sprint 4 + Sprint 6 + Sprint 7) ============
 // Runs all daemon intelligence tasks in order.
-// Execution order: proposals → learning → cascade → orphans → kit-hygiene → cross-agent → cross-tenant → paradox-detection → task-scheduling.
+// Execution order: proposals → learning → cascade → orphans → kit-hygiene → skill-health → cross-agent → cross-tenant → paradox-detection → task-scheduling.
 // Proposals first — it's the primary feature and uses the fewest subrequests.
 // Each task is isolated — failures don't cascade.
 
@@ -13,6 +13,7 @@ import { runOrphanTask } from "./tasks/orphans";
 import { runProposalTask } from "./tasks/proposals";
 import { runLearningTask } from "./tasks/learning";
 import { runKitHygieneTask } from "./tasks/kit-hygiene";
+import { runSkillHealthTask } from "./tasks/skill-health";
 import { runCrossAgentTask } from "./tasks/cross-agent";
 import { runCrossTenantTask } from "./tasks/cross-tenant";
 import { runParadoxDetectionTask } from "./tasks/paradox-detection";
@@ -89,7 +90,20 @@ export async function runDaemonTasks(
 		});
 	}
 
-	// 6. Cross-agent synthesis — convergent findings across different agent entities
+	// 6. Skill health — stale accepted skills + candidate drift proposals
+	try {
+		const result = await runSkillHealthTask(storage);
+		results.push(result);
+	} catch (err) {
+		results.push({
+			task: "skill-health",
+			changes: 0,
+			proposals_created: 0,
+			error: err instanceof Error ? err.message : "unknown error"
+		});
+	}
+
+	// 7. Cross-agent synthesis — convergent findings across different agent entities
 	try {
 		const result = await runCrossAgentTask(storage);
 		results.push(result);
@@ -102,7 +116,7 @@ export async function runDaemonTasks(
 		});
 	}
 
-	// 7. Cross-tenant proposals — shared territory convergence (craft, philosophy only)
+	// 8. Cross-tenant proposals — shared territory convergence (craft, philosophy only)
 	try {
 		const result = await runCrossTenantTask(storage);
 		results.push(result);
@@ -115,7 +129,7 @@ export async function runDaemonTasks(
 		});
 	}
 
-	// 8. Paradox detection — identity cores challenged 3+ times without a paradox loop
+	// 9. Paradox detection — identity cores challenged 3+ times without a paradox loop
 	try {
 		const result = await runParadoxDetectionTask(storage);
 		results.push(result);
@@ -128,7 +142,7 @@ export async function runDaemonTasks(
 		});
 	}
 
-	// 9. Task scheduling — advance scheduled tasks to open when their scheduled_wake passes
+	// 10. Task scheduling — advance scheduled tasks to open when their scheduled_wake passes
 	try {
 		const result = await runTaskSchedulingTask(storage);
 		results.push(result);

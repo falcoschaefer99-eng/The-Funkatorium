@@ -372,7 +372,7 @@ export interface A2ATaskEnvelope {
 export interface DaemonProposal {
 	id: string;
 	tenant_id: string;
-	proposal_type: 'link' | 'orphan_rescue' | 'consolidation' | 'dedup' | 'cross_agent' | 'cross_tenant' | 'paradox_detected';
+	proposal_type: 'link' | 'orphan_rescue' | 'consolidation' | 'dedup' | 'cross_agent' | 'cross_tenant' | 'paradox_detected' | 'skill_recapture' | 'skill_supersession' | 'skill_promotion';
 	source_id: string;
 	target_id: string;
 	similarity?: number;
