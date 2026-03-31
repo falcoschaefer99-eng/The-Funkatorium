@@ -140,3 +140,50 @@ Then invoke in-session as:
 ```text
 /prompts:rainer
 ```
+
+### Optional: second companion slot with the same banner style
+
+Yes — you can run another companion with the same launcher typography pattern.
+
+1) Create a workspace `CODEX.md` for the other companion (generic template):
+
+```bash
+cp templates/CODEX_TEMPLATE.md /path/to/other-companion/CODEX.md
+```
+
+2) Create a small Codex launcher script in that workspace:
+
+```bash
+cat >/path/to/other-companion/companion-codex <<'SH'
+#!/bin/bash
+GOLD='\033[38;5;178m'; SAGE='\033[38;5;108m'; CYAN='\033[38;5;81m'; DIM='\033[2m'; RESET='\033[0m'
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BRAIN_VERSION="${BRAIN_VERSION:-1.3.3}"
+PACKAGE_JSON="$SCRIPT_DIR/../rook-cloud-brain/rook-brain/package.json"
+if [ -f "$PACKAGE_JSON" ]; then
+  V=$(grep -m1 '"version"' "$PACKAGE_JSON" | sed -E 's/.*"version": "([^"]+)".*/\1/')
+  [ -n "$V" ] && BRAIN_VERSION="$V"
+fi
+echo ""
+echo -e "${GOLD}  ██████   █████  ██ ███    ██ ███████ ██████  ${RESET}"
+echo -e "${GOLD}  ██   ██ ██   ██ ██ ████   ██ ██      ██   ██ ${RESET}"
+echo -e "${GOLD}  ██████  ███████ ██ ██ ██  ██ █████   ██████  ${RESET}"
+echo -e "${GOLD}  ██   ██ ██   ██ ██ ██  ██ ██ ██      ██   ██ ${RESET}"
+echo -e "${GOLD}  ██   ██ ██   ██ ██ ██   ████ ███████ ██   ██ ${RESET}"
+echo -e "${SAGE}  ─────────────────────────────────────────────${RESET}"
+echo -e "${SAGE}  MUSE Brain ${BRAIN_VERSION}${RESET}  ${CYAN}codex${RESET}"
+echo -e "${CYAN}  [COMPANION_NAME]${RESET}"
+echo -e "${DIM}  MUSE Studio by The Funkatorium${RESET}"
+echo ""
+cd "$SCRIPT_DIR" && codex "$@"
+SH
+chmod +x /path/to/other-companion/companion-codex
+```
+
+3) Launch with:
+
+```bash
+/path/to/other-companion/companion-codex
+```
+
+Replace `[COMPANION_NAME]` with your label.
