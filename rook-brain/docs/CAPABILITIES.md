@@ -24,7 +24,7 @@ Need precise definitions or function-surface deltas? See the **[Glossary](GLOSSA
 - [Entity Model](#entity-model)
 - [Communication](#communication)
 - [Session Continuity](#session-continuity)
-- [Proactivity Additions (v1.1)](#proactivity-additions-v11)
+- [Anticipatory Recall](#anticipatory-recall)
 - [Wake System](#wake-system)
 - [Autonomous Runtime](#autonomous-runtime)
 - [Task Delegation](#task-delegation)
@@ -598,7 +598,7 @@ AI relationships break down in the space between sessions — the agent starts f
 
 ---
 
-## Proactivity Additions (v1.1)
+## Anticipatory Recall
 
 **Tools touched:** `mind_context`, `mind_runtime`, `mind_propose` | **What it reduces:** "remember-to-remember" drift
 

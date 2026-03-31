@@ -7,7 +7,7 @@
 //   Accept + consolidation → create skill observation, metabolize sources, accept candidate.
 // action=stats: return proposal statistics
 
-import { generateId, getTimestamp } from "../helpers";
+import { generateId, getTimestamp, toStringArray } from "../helpers";
 import { RESONANCE_TYPES } from "../constants";
 import type { Link, Observation } from "../types";
 import type { ToolContext } from "./context";
@@ -15,7 +15,7 @@ import type { ToolContext } from "./context";
 export const TOOL_DEFS = [
 	{
 		name: "mind_propose",
-		description: "Review and manage daemon-generated proposals. action=list: see pending proposals (types: link, orphan_rescue, consolidation, dedup, cross_agent, cross_tenant, paradox_detected, skill_recapture, skill_supersession, skill_promotion). action=review: accept or reject a proposal (link → bidirectional link; orphan_rescue → rescue or archive; consolidation → skill observation + metabolize sources). action=stats: acceptance statistics.",
+		description: "Review and manage daemon-generated proposals. action=list: see pending proposals (types: link, orphan_rescue, consolidation, dedup, cross_agent, cross_tenant, paradox_detected, skill_recapture, skill_supersession, skill_promotion, recall_contract, fact_commitment). action=review: accept or reject a proposal (link → bidirectional link; orphan_rescue → rescue or archive; consolidation → skill observation + metabolize sources). action=stats: acceptance statistics.",
 		inputSchema: {
 			type: "object",
 			properties: {
@@ -27,7 +27,7 @@ export const TOOL_DEFS = [
 				// list params
 				type: {
 					type: "string",
-					enum: ["link", "orphan_rescue", "consolidation", "dedup", "cross_agent", "cross_tenant", "paradox_detected", "skill_recapture", "skill_supersession", "skill_promotion"],
+					enum: ["link", "orphan_rescue", "consolidation", "dedup", "cross_agent", "cross_tenant", "paradox_detected", "skill_recapture", "skill_supersession", "skill_promotion", "recall_contract", "fact_commitment"],
 					description: "[list] Filter by proposal type"
 				},
 				status: {
@@ -311,7 +311,41 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 							candidate_id: candidateId
 						};
 					}
-				}
+
+					// --- recall/fact commitment proposals: review-gated task materialization ---
+					if (proposal.proposal_type === "recall_contract" || proposal.proposal_type === "fact_commitment") {
+						const metadata = (proposal.metadata ?? {}) as Record<string, unknown>;
+						const title = typeof metadata.title === "string" ? metadata.title.trim() : "Review follow-up";
+						const description = typeof metadata.description === "string"
+							? metadata.description
+							: (typeof proposal.rationale === "string" ? proposal.rationale : undefined);
+						const priority = normalizeTaskPriority(metadata.priority);
+						const source = typeof metadata.source === "string"
+							? metadata.source
+							: (proposal.proposal_type === "recall_contract" ? "recall_contract" : "fact_commitment_bridge");
+						const linkedEntityIds = toStringArray(metadata.linked_entity_ids);
+						const linkedObservationIds = toStringArray(metadata.linked_observation_ids);
+
+						const task = await storage.createTask({
+							title: title.length > 0 ? title.slice(0, 200) : "Review follow-up",
+							description,
+							status: "open",
+							priority: priority ?? (proposal.proposal_type === "fact_commitment" ? "high" : "normal"),
+							source,
+							linked_entity_ids: linkedEntityIds,
+							linked_observation_ids: linkedObservationIds
+						});
+
+						return {
+							reviewed: true,
+							decision: "accepted",
+							proposal_id: reviewed.id,
+							action_taken: "created_task",
+							proposal_type: proposal.proposal_type,
+							task_id: task.id,
+							task
+						};
+					}
 
 				// Rejection or unknown type — just return the reviewed status
 				return {
@@ -342,4 +376,12 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 		default:
 			throw new Error(`Unknown propose tool: ${name}`);
 	}
+}
+
+
+function normalizeTaskPriority(value: unknown): "burning" | "high" | "normal" | "low" | "someday" | undefined {
+	if (typeof value !== "string") return undefined;
+	return ["burning", "high", "normal", "low", "someday"].includes(value)
+		? value as "burning" | "high" | "normal" | "low" | "someday"
+		: undefined;
 }

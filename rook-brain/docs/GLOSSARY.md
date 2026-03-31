@@ -17,7 +17,7 @@ Canonical terms and function additions for launch documentation.
 
 ---
 
-## Proactivity v1.1 terms
+## Anticipatory recall terms
 
 | Term | Definition |
 |------|------------|

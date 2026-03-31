@@ -1,7 +1,7 @@
 # Sprint 8 — Autonomous Execution Layer (Canonical)
 
 **Date locked:** 2026-03-28
-**Status:** in progress
+**Status:** complete (closed)
 **Purpose:** close the gap between a capable brain substrate and real autonomous cloud execution.
 
 ---
@@ -63,12 +63,12 @@ This sprint is the bridge from **memory substrate** to **autonomous orchestrator
 ## Sprint 8 checklist
 
 - [x] **S8.0 Truth map complete** (this document + architecture alignment)
-- [ ] **S8.1 Cloud runner wiring** (`/schedule` + `claude -p` pathway; script+docs landed via `scripts/runtime-autonomous-wake.sh` and `docs/SPRINT8_RUNNER_WIRING.md`, live cloud proof run pending)
+- [x] **S8.1 Cloud runner wiring** (`/schedule` + `claude -p` pathway; script+docs landed via `scripts/runtime-autonomous-wake.sh` and `docs/SPRINT8_RUNNER_WIRING.md`)
 - [x] **S8.2 Session continuity** (store/resume `session_id` in brain substrate)
 - [x] **S8.3 Trigger bridge** (daemon/webhook/event trigger path via `/runtime/trigger` + `mind_runtime action=trigger`)
-- [ ] **S8.4 Cross-agent autonomous delegation** (Rook -> Rainer independent execution; delegated task auto-claim landed in trigger path, external runner execution loop still pending)
+- [x] **S8.4 Cross-agent autonomous delegation** (Rook -> Rainer independent execution with delegated-first selection + auto-claim + completion handoff path)
 - [x] **S8.5 Candidate skill capture stub** (successful admitted trigger runs can emit `skill_candidate` artifacts in craft territory)
-- [ ] **S8.6 End-to-end proof run** (no laptop-interactive dependency)
+- [x] **S8.6 End-to-end proof run** (no laptop-interactive dependency)
 
 ### Sprint 8 operating policy (added 2026-03-28)
 
@@ -77,7 +77,11 @@ This sprint is the bridge from **memory substrate** to **autonomous orchestrator
 - `npx tsc --noEmit` passes.
 - `npx vitest -c vitest.unit.config.mts test/tasks-v2.spec.ts test/runtime-v2.spec.ts` passes (26/26).
 - `bash -n scripts/runtime-autonomous-wake.sh` passes.
-- Live cloud proof run remains the final S8.6 gate.
+- Live cloud proof run completed on 2026-03-29 as the S8.6 gate.
+
+### Completion note (2026-03-30)
+
+Sprint 8 is fully closed. This document remains the canonical scope record for Sprint 8 naming, but active implementation moved to Sprint 9/10 skill-capture and runtime hardening slices.
 
 
 - Duty wakes are always first-class.

@@ -148,7 +148,6 @@ describe('context confidence gating', () => {
 		expect(storage.hybridSearch).toHaveBeenCalledWith(expect.objectContaining({
 			entity_id: 'entity_project_atlas'
 		}));
-	});
 });
 
 describe('productivity fact extraction on mind_context', () => {
@@ -248,4 +247,92 @@ describe('productivity fact extraction on mind_context', () => {
 		expect(result.fact_extraction.stored_count).toBe(1);
 		expect(appendToTerritory).toHaveBeenCalledTimes(1);
 	});
+
+	it('stores recall contracts in conversation context', async () => {
+		const writeConversationContext = vi.fn(async () => undefined);
+		const storage = {
+			writeConversationContext,
+			appendToTerritory: vi.fn(async () => undefined)
+		};
+
+		const result = await handleCommsTool('mind_context', {
+			action: 'set',
+			summary: 'We need periodic follow-up on release readiness.',
+			recall_contracts: [
+				{
+					id: 'release_followup',
+					title: 'Re-check release readiness',
+					note: 'Verify docs + gauntlet once more',
+					recall_after_hours: 24,
+					scope: 'task',
+					priority: 'high'
+				}
+			]
+		}, { storage: storage as any });
+
+		expect(result.saved).toBe(true);
+		expect(result.recall_contracts_saved).toBe(1);
+		expect(result.recall_contract_ids).toContain('release_followup');
+		expect(writeConversationContext).toHaveBeenCalledWith(expect.objectContaining({
+			recall_contracts: [expect.objectContaining({
+				id: 'release_followup',
+				title: 'Re-check release readiness',
+				recall_after_hours: 24,
+				scope: 'task',
+				priority: 'high'
+			})]
+		}));
+	});
+
+	it('bridges high-confidence decision/deadline facts into commitment proposals', async () => {
+		const createProposal = vi.fn(async (payload: any) => ({
+			id: `proposal_${payload.source_id}`,
+			...payload
+		}));
+		const proposalExists = vi.fn(async () => false);
+		const appendToTerritory = vi.fn(async () => undefined);
+		const storage = {
+			getTenant: () => 'rainer',
+			writeConversationContext: vi.fn(async () => undefined),
+			appendToTerritory,
+			proposalExists,
+			createProposal
+		};
+
+		const result = await handleCommsTool('mind_context', {
+			action: 'set',
+			summary: 'We decided to ship Proactivity v1.1. Deadline: tomorrow.',
+			extract_facts: true,
+			extraction_mode: 'write',
+			auto_commit: true,
+			commitment_mode: 'proposal',
+			commitment_threshold: 0.8
+		}, { storage: storage as any });
+
+		expect(result.fact_extraction.mode).toBe('write');
+		expect(result.commitment_bridge.enabled).toBe(true);
+		expect(result.commitment_bridge.proposal_count).toBeGreaterThan(0);
+		expect(createProposal).toHaveBeenCalled();
+		expect(createProposal).toHaveBeenCalledWith(expect.objectContaining({
+			proposal_type: 'fact_commitment',
+			status: 'pending'
+		}));
+		expect(proposalExists).toHaveBeenCalled();
+		expect(appendToTerritory).toHaveBeenCalled();
+	});
+
+	it('requires extract_facts when auto_commit is enabled', async () => {
+		const storage = {
+			writeConversationContext: vi.fn(async () => undefined)
+		};
+
+		const result = await handleCommsTool('mind_context', {
+			action: 'set',
+			summary: 'We decided to ship.',
+			auto_commit: true
+		}, { storage: storage as any });
+
+		expect(result.error).toMatch(/auto_commit requires extract_facts=true/i);
+	});
+
 });

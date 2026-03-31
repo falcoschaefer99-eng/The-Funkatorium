@@ -1,6 +1,6 @@
 // ============ DAEMON ORCHESTRATOR (Sprint 4 + Sprint 6 + Sprint 7) ============
 // Runs all daemon intelligence tasks in order.
-// Execution order: proposals → learning → cascade → orphans → kit-hygiene → skill-health → cross-agent → cross-tenant → paradox-detection → task-scheduling.
+// Execution order: proposals → learning → cascade → orphans → kit-hygiene → skill-health → cross-agent → cross-tenant → paradox-detection → recall-contracts → task-scheduling.
 // Proposals first — it's the primary feature and uses the fewest subrequests.
 // Each task is isolated — failures don't cascade.
 
@@ -17,6 +17,7 @@ import { runSkillHealthTask } from "./tasks/skill-health";
 import { runCrossAgentTask } from "./tasks/cross-agent";
 import { runCrossTenantTask } from "./tasks/cross-tenant";
 import { runParadoxDetectionTask } from "./tasks/paradox-detection";
+import { runRecallContractsTask } from "./tasks/recall-contracts";
 import { runTaskSchedulingTask } from "./tasks/task-scheduling";
 
 export async function runDaemonTasks(
@@ -142,7 +143,20 @@ export async function runDaemonTasks(
 		});
 	}
 
-	// 10. Task scheduling — advance scheduled tasks to open when their scheduled_wake passes
+	// 10. Recall contracts — materialize due recall contracts into tasks/proposals
+	try {
+		const result = await runRecallContractsTask(storage);
+		results.push(result);
+	} catch (err) {
+		results.push({
+			task: "recall-contracts",
+			changes: 0,
+			proposals_created: 0,
+			error: err instanceof Error ? err.message : "unknown error"
+		});
+	}
+
+	// 11. Task scheduling — advance scheduled tasks to open when their scheduled_wake passes
 	try {
 		const result = await runTaskSchedulingTask(storage);
 		results.push(result);

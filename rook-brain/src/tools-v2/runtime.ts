@@ -9,7 +9,9 @@ import type {
 	AgentRuntimeUsage,
 	Task,
 	Observation,
-	CapturedSkillArtifact
+	CapturedSkillArtifact,
+	ProjectDossier,
+	OpenLoop
 } from "../types";
 import { generateId, getTimestamp } from "../helpers";
 import type { ToolContext } from "./context";
@@ -30,6 +32,25 @@ type ContextRetrievalPolicy = {
 	recency_boost_days: number;
 	recency_boost: number;
 };
+
+type IntentionPulse = {
+	generated_at: string;
+	stale_high_priority_tasks: number;
+	oldest_high_priority_task_age_hours: number;
+	burning_loops: number;
+	nagging_loops: number;
+	active_projects_with_next_actions: number;
+	stale_projects_with_next_actions: number;
+	stale_task_window_hours: number;
+	stale_project_window_hours: number;
+	requires_attention: boolean;
+	summary_lines: string[];
+};
+
+const INTENTION_STALE_TASK_HOURS = 24;
+const INTENTION_STALE_PROJECT_HOURS = 72;
+const INTENTION_TASK_SCAN_LIMIT = 200;
+const INTENTION_PROJECT_SCAN_LIMIT = 100;
 
 const POLICY_DEFAULTS: Record<ExecutionMode, Omit<AgentRuntimePolicy,
 	"id" | "tenant_id" | "agent_tenant" | "updated_by" | "metadata" | "created_at" | "updated_at"
@@ -374,6 +395,7 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 					}
 					const selectedTask = claimedTask ?? recommendedTask;
 					const contextRetrievalPolicy = buildContextRetrievalPolicy(policy, wakeKind);
+					const intentionPulse = await buildIntentionPulse(storage, startedAt, agentTenant);
 
 					const summary = cleanText(args.summary) ?? buildTriggerSummary({
 						deferred,
@@ -503,6 +525,7 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 						recommended_task: recommendedTask,
 						claimed_task: claimedTask,
 						claim_error: claimError,
+						intention_pulse: intentionPulse,
 						skill_candidate: skillCandidate,
 						skill_candidate_error: skillCandidateError,
 						captured_skill: capturedSkill,
@@ -511,8 +534,9 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 							should_run: !deferred && selectedTask != null,
 							resume_session_id: resolvedSessionId,
 							context_retrieval_policy: contextRetrievalPolicy,
+							intention_pulse: intentionPulse,
 							task: selectedTask,
-							prompt: selectedTask ? buildAutonomousTaskPrompt(selectedTask, agentTenant, wakeKind, policy, contextRetrievalPolicy) : undefined
+							prompt: selectedTask ? buildAutonomousTaskPrompt(selectedTask, agentTenant, wakeKind, policy, contextRetrievalPolicy, intentionPulse) : undefined
 						},
 						open_tasks_preview: openTasks,
 						run,
@@ -727,7 +751,8 @@ function buildAutonomousTaskPrompt(
 	agentTenant: string,
 	wakeKind: WakeKind,
 	policy?: AgentRuntimePolicy,
-	contextPolicy?: ContextRetrievalPolicy
+	contextPolicy?: ContextRetrievalPolicy,
+	intentionPulse?: IntentionPulse
 ): string {
 	const delegated = isDelegatedTaskForAgent(task, agentTenant);
 	const lines: string[] = [
@@ -769,7 +794,94 @@ function buildAutonomousTaskPrompt(
 		);
 	}
 
+	if (intentionPulse) {
+		lines.push("", "Intention pulse:");
+		for (const pulseLine of intentionPulse.summary_lines) {
+			lines.push(`- ${pulseLine}`);
+		}
+		if (intentionPulse.requires_attention) {
+			lines.push("- If this task conflicts with the pulse, stabilize drift first, then execute.");
+		}
+	}
+
 	return lines.join("\n");
+}
+
+async function buildIntentionPulse(
+	storage: ToolContext["storage"],
+	nowIso: string,
+	agentTenant: string
+): Promise<IntentionPulse> {
+	const [openTasks, inProgressTasks, loops, projects] = await Promise.all([
+		typeof storage.listTasks === "function"
+			? storage.listTasks("open", undefined, INTENTION_TASK_SCAN_LIMIT, true)
+			: Promise.resolve([] as Task[]),
+		typeof storage.listTasks === "function"
+			? storage.listTasks("in_progress", undefined, INTENTION_TASK_SCAN_LIMIT, true)
+			: Promise.resolve([] as Task[]),
+		typeof storage.readOpenLoops === "function"
+			? storage.readOpenLoops()
+			: Promise.resolve([] as OpenLoop[]),
+		typeof storage.listProjectDossiers === "function"
+			? storage.listProjectDossiers({ lifecycle_status: "active", limit: INTENTION_PROJECT_SCAN_LIMIT })
+			: Promise.resolve([] as ProjectDossier[])
+	]);
+
+	const highPriorityTasks = [...openTasks, ...inProgressTasks].filter(task => {
+		const inScope = task.tenant_id === agentTenant || isDelegatedTaskForAgent(task, agentTenant);
+		const highPriority = task.priority === "burning" || task.priority === "high";
+		return inScope && highPriority;
+	});
+
+	let staleHighPriorityTasks = 0;
+	let oldestHighPriorityTaskAgeHours = 0;
+	for (const task of highPriorityTasks) {
+		const taskStamp = task.updated_at ?? task.created_at;
+		const ageHours = hoursBetween(taskStamp, nowIso);
+		if (ageHours >= INTENTION_STALE_TASK_HOURS) {
+			staleHighPriorityTasks++;
+			if (ageHours > oldestHighPriorityTaskAgeHours) oldestHighPriorityTaskAgeHours = ageHours;
+		}
+	}
+
+	const burningLoops = loops.filter(loop => loop.status === "burning").length;
+	const naggingLoops = loops.filter(loop => loop.status === "nagging").length;
+
+	const projectsWithNextActions = projects.filter(project => (project.next_actions ?? []).length > 0);
+	let staleProjectsWithNextActions = 0;
+	for (const project of projectsWithNextActions) {
+		const projectStamp = project.last_active_at ?? project.updated_at;
+		const ageHours = hoursBetween(projectStamp, nowIso);
+		if (ageHours >= INTENTION_STALE_PROJECT_HOURS) staleProjectsWithNextActions++;
+	}
+
+	const summaryLines: string[] = [];
+	if (staleHighPriorityTasks > 0) {
+		summaryLines.push(`${staleHighPriorityTasks} stale high-priority task(s) (oldest ~${Math.floor(oldestHighPriorityTaskAgeHours)}h).`);
+	}
+	if (burningLoops > 0 || naggingLoops > 0) {
+		summaryLines.push(`${burningLoops} burning + ${naggingLoops} nagging loop(s) currently open.`);
+	}
+	if (staleProjectsWithNextActions > 0) {
+		summaryLines.push(`${staleProjectsWithNextActions} active project(s) with next-actions look stale (>${INTENTION_STALE_PROJECT_HOURS}h).`);
+	}
+	if (summaryLines.length === 0) {
+		summaryLines.push("No major drift signals detected across tasks, loops, or projects.");
+	}
+
+	return {
+		generated_at: nowIso,
+		stale_high_priority_tasks: staleHighPriorityTasks,
+		oldest_high_priority_task_age_hours: Math.floor(oldestHighPriorityTaskAgeHours),
+		burning_loops: burningLoops,
+		nagging_loops: naggingLoops,
+		active_projects_with_next_actions: projectsWithNextActions.length,
+		stale_projects_with_next_actions: staleProjectsWithNextActions,
+		stale_task_window_hours: INTENTION_STALE_TASK_HOURS,
+		stale_project_window_hours: INTENTION_STALE_PROJECT_HOURS,
+		requires_attention: staleHighPriorityTasks > 0 || burningLoops > 0 || staleProjectsWithNextActions > 0,
+		summary_lines: summaryLines
+	};
 }
 
 function buildContextRetrievalPolicy(policy: AgentRuntimePolicy, wakeKind: WakeKind): ContextRetrievalPolicy {

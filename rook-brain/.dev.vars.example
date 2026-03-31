@@ -1,0 +1,3 @@
+# Local wrangler dev values
+DATABASE_URL=postgresql://USER:PASSWORD@HOST/DB?sslmode=require
+API_KEY=local-dev-api-key

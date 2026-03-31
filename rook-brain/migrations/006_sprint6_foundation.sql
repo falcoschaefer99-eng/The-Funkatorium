@@ -2,11 +2,11 @@
 -- Brain v5 — Migration 006: Sprint 6 Foundation
 -- ============================================================
 
--- 1. Rename co_surfacing -> memory_cascade (Falco's term)
+-- 1. Rename co_surfacing -> memory_cascade
 ALTER TABLE co_surfacing RENAME TO memory_cascade;
 ALTER INDEX idx_cosurface_tenant_count RENAME TO idx_cascade_tenant_count;
 
--- 2. Processing log (engagement audit trail — our vocabulary, not Mary's "sits")
+-- 2. Processing log (engagement audit trail)
 -- NOTE: observation_sits was in the spec but never created. Fresh table.
 CREATE TABLE processing_log (
     id              TEXT PRIMARY KEY,

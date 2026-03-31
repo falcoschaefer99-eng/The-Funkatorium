@@ -14,6 +14,12 @@ const MAX_SUMMARY_LENGTH = 10_000;
 const MAX_ARRAY_ITEM_LENGTH = 2_000;
 const MAX_ARRAY_ITEMS = 50;
 const MAX_FACT_CONTENT_LENGTH = 2_000;
+const MAX_RECALL_CONTRACTS = 25;
+const MIN_RECALL_AFTER_HOURS = 1;
+const MAX_RECALL_AFTER_HOURS = 24 * 30;
+
+const TASK_PRIORITIES = ["burning", "high", "normal", "low", "someday"] as const;
+const RECALL_SCOPES = ["task", "proposal"] as const;
 
 const RE_DECISION = /(decided|decision|we will|we're going to|chosen)/i;
 const RE_DEADLINE = /(deadline|due|by\s+\d{4}-\d{2}-\d{2}|tomorrow|next week|next sprint)/i;
@@ -28,6 +34,20 @@ interface ExtractedFact {
 	fact_type: ExtractedFactType;
 	confidence: number;
 	source: "summary" | "key_point" | "open_thread";
+}
+
+type TaskPriority = typeof TASK_PRIORITIES[number];
+type RecallScope = typeof RECALL_SCOPES[number];
+
+interface RecallContract {
+	id: string;
+	title: string;
+	note?: string;
+	recall_after_hours: number;
+	scope: RecallScope;
+	priority: TaskPriority;
+	linked_entity_ids: string[];
+	metadata: Record<string, unknown>;
 }
 
 function splitSentences(text: string): string[] {
@@ -79,6 +99,82 @@ function extractProductivityFacts(
 	for (const thread of openThreads) addLine(thread, "open_thread");
 
 	return collected.slice(0, maxFacts);
+}
+
+
+function toSafeToken(input: string, fallback: string): string {
+	const sanitized = input
+		.toLowerCase()
+		.replace(/[^a-z0-9_-]+/g, "_")
+		.replace(/^_+|_+$/g, "")
+		.slice(0, 64);
+	return sanitized || fallback;
+}
+
+function normalizeTaskPriority(value: unknown): TaskPriority | undefined {
+	if (typeof value !== "string") return undefined;
+	return TASK_PRIORITIES.includes(value as TaskPriority)
+		? value as TaskPriority
+		: undefined;
+}
+
+function normalizeRecallScope(value: unknown): RecallScope | undefined {
+	if (typeof value !== "string") return undefined;
+	return RECALL_SCOPES.includes(value as RecallScope)
+		? value as RecallScope
+		: undefined;
+}
+
+function parseRecallContracts(value: unknown): { contracts: RecallContract[]; error?: string } {
+	if (value === undefined) return { contracts: [] };
+	if (!Array.isArray(value)) return { contracts: [], error: "recall_contracts must be an array" };
+	if (value.length > MAX_RECALL_CONTRACTS) {
+		return { contracts: [], error: `recall_contracts too many items (max ${MAX_RECALL_CONTRACTS})` };
+	}
+
+	const contracts: RecallContract[] = [];
+	for (let i = 0; i < value.length; i++) {
+		const raw = value[i];
+		if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+			return { contracts: [], error: `recall_contracts[${i}] must be an object` };
+		}
+		const obj = raw as Record<string, unknown>;
+		const title = cleanText(obj.title);
+		if (!title) return { contracts: [], error: `recall_contracts[${i}].title is required` };
+		const recallAfter = parseOptionalPositiveInt(obj.recall_after_hours, MIN_RECALL_AFTER_HOURS, MAX_RECALL_AFTER_HOURS);
+		if (recallAfter === undefined) {
+			return { contracts: [], error: `recall_contracts[${i}].recall_after_hours must be an integer between ${MIN_RECALL_AFTER_HOURS} and ${MAX_RECALL_AFTER_HOURS}` };
+		}
+		const scope = normalizeRecallScope(obj.scope) ?? "task";
+		const priority = normalizeTaskPriority(obj.priority) ?? "normal";
+		const metadata = (obj.metadata && typeof obj.metadata === "object" && !Array.isArray(obj.metadata))
+			? obj.metadata as Record<string, unknown>
+			: {};
+		const rawId = cleanText(obj.id) ?? `${title}-${i + 1}`;
+		contracts.push({
+			id: toSafeToken(rawId, `recall_${i + 1}`),
+			title,
+			note: cleanText(obj.note),
+			recall_after_hours: recallAfter,
+			scope,
+			priority,
+			linked_entity_ids: toStringArray(obj.linked_entity_ids),
+			metadata
+		});
+	}
+
+	return { contracts };
+}
+
+function truncateText(input: string, max = 120): string {
+	const clean = input.trim();
+	if (clean.length <= max) return clean;
+	return `${clean.slice(0, max - 1)}…`;
+}
+
+function isCommitEligibleFact(fact: ExtractedFact, threshold: number): boolean {
+	if (fact.confidence < threshold) return false;
+	return fact.fact_type === "decision" || fact.fact_type === "deadline";
 }
 
 function parseOptionalPositiveInt(value: unknown, min: number, max: number): number | undefined {
@@ -134,7 +230,28 @@ export const TOOL_DEFS = [
 				create_tasks: { type: "boolean", default: false, description: "[set] Auto-create tasks from open_threads" },
 				extract_facts: { type: "boolean", default: false, description: "[set] Extract productivity fact candidates from summary/key_points/open_threads" },
 				extraction_mode: { type: "string", enum: ["shadow", "write"], default: "shadow", description: "[set+extract_facts] shadow=preview only, write=persist fact_candidate observations in craft" },
-				max_fact_candidates: { type: "number", description: "[set+extract_facts] Max extracted fact candidates (default 5, max 10)" }
+				max_fact_candidates: { type: "number", description: "[set+extract_facts] Max extracted fact candidates (default 5, max 10)" },
+				recall_contracts: {
+					type: "array",
+					items: {
+						type: "object",
+						properties: {
+							id: { type: "string" },
+							title: { type: "string" },
+							note: { type: "string" },
+							recall_after_hours: { type: "number" },
+							scope: { type: "string", enum: ["task", "proposal"] },
+							priority: { type: "string", enum: ["burning", "high", "normal", "low", "someday"] },
+							linked_entity_ids: { type: "array", items: { type: "string" } },
+							metadata: { type: "object" }
+						}
+					},
+					description: "[set] Optional recall contracts to prevent remember-to-remember drift"
+				},
+				auto_commit: { type: "boolean", default: false, description: "[set+extract_facts] If true, convert eligible fact candidates into reviewable commitment proposals" },
+				commitment_mode: { type: "string", enum: ["shadow", "proposal"], default: "proposal", description: "[set+auto_commit] shadow=preview only, proposal=create fact_commitment proposals" },
+				commitment_threshold: { type: "number", description: "[set+auto_commit] Minimum confidence for decision/deadline commitment bridge (default 0.82)" },
+				commitment_project_entity_id: { type: "string", description: "[set+auto_commit] Optional project entity id to link generated commitments" }
 			},
 			required: ["action"]
 		}
@@ -263,6 +380,26 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 				if (args.max_fact_candidates !== undefined && parsedMaxFacts === undefined) {
 					return { error: `max_fact_candidates must be an integer between 1 and ${MAX_FACT_CANDIDATES}` };
 				}
+				const parsedRecallContracts = parseRecallContracts(args.recall_contracts);
+				if (parsedRecallContracts.error) {
+					return { error: parsedRecallContracts.error };
+				}
+				if (args.auto_commit !== undefined && typeof args.auto_commit !== "boolean") {
+					return { error: "auto_commit must be a boolean" };
+				}
+				if (args.auto_commit === true && args.extract_facts !== true) {
+					return { error: "auto_commit requires extract_facts=true" };
+				}
+				if (args.commitment_mode !== undefined && !["shadow", "proposal"].includes(args.commitment_mode)) {
+					return { error: "commitment_mode must be shadow or proposal" };
+				}
+				const commitmentThresholdRaw = args.commitment_threshold;
+				const commitmentThreshold = commitmentThresholdRaw === undefined
+					? 0.82
+					: (typeof commitmentThresholdRaw === "number" && Number.isFinite(commitmentThresholdRaw) ? commitmentThresholdRaw : NaN);
+				if (Number.isNaN(commitmentThreshold) || commitmentThreshold < 0 || commitmentThreshold > 1) {
+					return { error: "commitment_threshold must be a number between 0 and 1" };
+				}
 
 				const context = {
 					timestamp: getTimestamp(),
@@ -270,7 +407,8 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 					partner: args.partner || "Falco",
 					key_points: toStringArray(args.key_points),
 					emotional_state: args.emotional_state,
-					open_threads: toStringArray(args.open_threads)
+					open_threads: toStringArray(args.open_threads),
+					recall_contracts: parsedRecallContracts.contracts
 				};
 
 				await storage.writeConversationContext(context);
@@ -280,6 +418,10 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 					timestamp: context.timestamp,
 					note: "Context saved. Next session will know where we left off."
 				};
+				if (context.recall_contracts.length > 0) {
+					response.recall_contracts_saved = context.recall_contracts.length;
+					response.recall_contract_ids = context.recall_contracts.map(contract => contract.id);
+				}
 
 				if (args.create_tasks && context.open_threads.length > 0) {
 					const validThreads = context.open_threads
@@ -316,6 +458,7 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 					);
 
 					const storedIds: string[] = [];
+					const storedFacts: Array<{ fact: ExtractedFact; observation: Observation }> = [];
 					if (extractionMode === "write" && factCandidates.length > 0) {
 						const observations: Observation[] = [];
 						for (const fact of factCandidates) {
@@ -339,6 +482,7 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 								tags: ["fact-candidate", "auto-extracted", "productivity"]
 							};
 							observations.push(observation);
+							storedFacts.push({ fact, observation });
 							storedIds.push(observation.id);
 						}
 						await Promise.all(observations.map(obs => storage.appendToTerritory("craft", obs)));
@@ -351,6 +495,75 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 						stored_count: storedIds.length,
 						stored_ids: storedIds
 					};
+
+					if (args.auto_commit === true) {
+						if (extractionMode !== "write") {
+							return { error: "auto_commit requires extraction_mode=write for auditable provenance" };
+						}
+						const commitmentMode = args.commitment_mode ?? "proposal";
+						const projectEntityId = cleanText(args.commitment_project_entity_id);
+						const targetId = toSafeToken(projectEntityId ?? "fact_commitment_queue", "fact_commitment_queue");
+						const eligible = storedFacts.filter(({ fact }) => isCommitEligibleFact(fact, commitmentThreshold));
+
+						const suggestions = eligible.map(({ fact, observation }) => {
+							const isDeadline = fact.fact_type === "deadline";
+							const title = isDeadline
+								? `Honor deadline: ${truncateText(fact.fact, 120)}`
+								: `Follow through decision: ${truncateText(fact.fact, 120)}`;
+							return {
+								title,
+								description: `Auto-derived from fact candidate ${observation.id} (${fact.fact_type}, confidence=${Math.round(fact.confidence * 100) / 100}).`,
+								priority: isDeadline ? "high" : "normal",
+								fact_type: fact.fact_type,
+								confidence: fact.confidence,
+								source_observation_id: observation.id
+							};
+						});
+
+						const proposalIds: string[] = [];
+						let skippedExisting = 0;
+
+						if (commitmentMode === "proposal") {
+							for (const suggestion of suggestions) {
+								const exists = await storage.proposalExists("fact_commitment", suggestion.source_observation_id, targetId);
+								if (exists) {
+									skippedExisting++;
+									continue;
+								}
+								const proposal = await storage.createProposal({
+									tenant_id: storage.getTenant(),
+									proposal_type: "fact_commitment",
+									source_id: suggestion.source_observation_id,
+									target_id: targetId,
+									confidence: Math.min(0.95, Math.round((suggestion.confidence + 0.08) * 100) / 100),
+									rationale: `Fact→commitment bridge (${suggestion.fact_type})`,
+									metadata: {
+										title: suggestion.title,
+										description: suggestion.description,
+										priority: suggestion.priority,
+										source: "fact_commitment_bridge",
+										linked_observation_ids: [suggestion.source_observation_id],
+										linked_entity_ids: projectEntityId ? [projectEntityId] : [],
+										fact_type: suggestion.fact_type,
+										confidence: suggestion.confidence
+									},
+									status: "pending"
+								});
+								proposalIds.push(proposal.id);
+							}
+						}
+
+						response.commitment_bridge = {
+							enabled: true,
+							mode: commitmentMode,
+							threshold: commitmentThreshold,
+							eligible_count: suggestions.length,
+							proposal_count: proposalIds.length,
+							skipped_existing: skippedExisting,
+							proposal_ids: proposalIds,
+							suggestions
+						};
+					}
 				}
 
 				return response;

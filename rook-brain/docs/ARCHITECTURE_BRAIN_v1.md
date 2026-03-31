@@ -552,25 +552,20 @@ The system operates under an **operator-supervised autonomy** posture. The agent
 - **No automatic cross-tenant skill propagation** — skills stay within their tenant unless explicitly delegated. Global skill sharing requires additional review infrastructure.
 - **Single orchestrator topology** — the hub-and-spoke model means all requests route through one worker. Horizontal scaling is a Cloudflare deployment concern, not an architectural one.
 
-### 16.2 Post-release additions (next implementation lane)
+### 16.2 Anticipatory recall (shipped)
 
-These are the immediate additions planned after release to reduce "remember-to-remember" drift:
+Three additions to reduce "remember-to-remember" drift:
 
-1. **Intention Pulse in autonomous trigger**  
+1. **Intention Pulse in autonomous trigger**
    Runtime computes intention drift (stale high-priority tasks, burning/nagging loops, stale active-project next actions) and injects the result into the runner contract and autonomous prompt.
-2. **Recall Contracts with daemon materialization**  
+2. **Recall Contracts with daemon materialization**
    Structured recall rules become first-class context metadata; due recalls materialize as tasks or review proposals through a dedicated daemon pass.
-3. **Fact → Commitment bridge (review-gated)**  
+3. **Fact → Commitment bridge (review-gated)**
    High-confidence extracted facts (`decision`/`deadline`) can be promoted into reviewable commitments; accepted proposals materialize into actionable tasks with provenance.
 
-Formal spec references:
+### 16.3 Next lane (parity roadmap)
 
-- **[Proactivity v1.1 — Small Sprint Spec](PROACTIVITY_v1_1_SPEC.md)**
-- **[Proactivity Parity Roadmap](PROACTIVITY_PARITY_ROADMAP.md)**
-
-### 16.3 Next lane after v1.1 (parity roadmap)
-
-Planned progression after the small sprint:
+Planned progression:
 
 - intention continuity engine (goal-state drift + recovery generation)
 - event-driven recall reliability (state transitions, not only timers)
@@ -580,15 +575,16 @@ Planned progression after the small sprint:
 
 ### 16.4 Research grounding
 
-Every major architecture decision traces to published research — 15 academic papers across multi-agent reasoning, institutional alignment, persistent memory, and self-evolving systems.
+Every major architecture decision traces to published research — 16 academic papers across multi-agent reasoning, institutional alignment, persistent memory, and self-evolving systems.
 
-Five areas where this implementation extends beyond current academic literature:
+Six areas where this implementation extends beyond current academic literature:
 
 1. **Bilateral consent architecture** — consent symmetry between human and AI agents, with relationship-gated permissions and hard boundaries
 2. **Emotional texture in dispatch** — somatic markers applied to agent selection and task routing, not just memory storage
 3. **Creative and builder specialization** — distinct editorial/literary agents and engineering agents with different methodologies, operating on the same substrate
 4. **Charge processing as system property** — charge phase as a first-class memory property with processing mechanics that change memory behavior
 5. **Role-based permissions for reasoning agents** — RBAC applied to reasoning agent teams, with explicit read/write permissions enforced by architecture
+6. **Relational harness engineering** — Pan et al. (2026) formalize natural-language agent harnesses as portable artifacts. Our implementation extends NLAHs into relational and emotional dimensions — consent-gated dispatch, identity-persistent harnesses, and charge-aware artifact lifecycle — territory the harness engineering literature has not entered.
 
 Full bibliography with paper-to-implementation mapping: **[Bibliography](BIBLIOGRAPHY.md)**
 

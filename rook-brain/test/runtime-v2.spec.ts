@@ -228,6 +228,8 @@ describe('runtime v2 tool', () => {
 		expect(result.runner_contract?.prompt).toContain('confidence_threshold=0.72');
 		expect(result.runner_contract?.prompt).toContain('shadow_mode=true');
 		expect(result.runner_contract?.prompt).toContain('max_context_items=6');
+		expect(result.runner_contract?.prompt).toContain('Intention pulse:');
+		expect(result.runner_contract?.intention_pulse?.stale_high_priority_tasks).toBeGreaterThanOrEqual(1);
 		expect(result.skill_candidate?.type).toBe('skill_candidate');
 		expect(appendToTerritory).toHaveBeenCalledTimes(1);
 		expect(openDueScheduledTasks).toHaveBeenCalledWith('2026-03-28T12:00:00.000Z', 50);

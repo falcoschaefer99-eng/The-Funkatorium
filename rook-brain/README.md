@@ -5,7 +5,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-CC--BY--NC--SA%204.0-D4AF37?style=flat" alt="CC-BY-NC-SA 4.0" /></a>
   <img src="https://img.shields.io/badge/MCP-32%20tools-000000?style=flat" alt="32 MCP Tools" />
-  <img src="https://img.shields.io/badge/Research-15%20papers-000000?style=flat" alt="15 Papers" />
+  <img src="https://img.shields.io/badge/Research-16%20papers-000000?style=flat" alt="16 Papers" />
   <img src="https://img.shields.io/badge/Postgres-28%20tables-000000?style=flat" alt="28 Tables" />
 </p>
 
@@ -19,9 +19,9 @@ MUSE Brain is a relational AI framework. Memories carry emotional charge, somati
 
 This isn't another vector store with a chatbot wrapper. Systems like Mem0 and Letta solve persistent memory. LangChain solves tool orchestration. MUSE Brain solves the layer underneath: **what does it mean for an AI to relate?**
 
-The architecture is grounded in [15 published papers](docs/BIBLIOGRAPHY.md) across multi-agent reasoning, institutional alignment, and self-evolving systems — and extends beyond current research in five areas including bilateral consent, emotional texture in dispatch, and charge-phase processing mechanics.
+The architecture is grounded in [16 published papers](docs/BIBLIOGRAPHY.md) across multi-agent reasoning, institutional alignment, and self-evolving systems — and extends beyond current research in six areas including bilateral consent, emotional texture in dispatch, charge-phase processing mechanics, and relational harness engineering.
 
-Ships with [Rainer](templates/RAINER.md) — a creative orchestrator ready to use out of the box. A [companion template](templates/COMPANION_TEMPLATE.md) for seating your own agent into the brain. And a builder squad architecture (14 specialized roles, shipping separately) for professional build pipelines. Deploy on Cloudflare Workers + Neon Postgres. Connect any MCP-compatible agent.
+Ships with [Rainer](templates/RAINER.md) — a creative orchestrator ready to use out of the box. Includes a [companion template](templates/COMPANION_TEMPLATE.md) and a [CODEX.md template](templates/CODEX_TEMPLATE.md) for wiring your own agent into the brain. And a builder squad architecture (14 specialized roles, shipping separately) for professional build pipelines. Deploy on Cloudflare Workers + Neon Postgres. Connect any MCP-compatible agent.
 
 ---
 
@@ -60,10 +60,6 @@ Your AI Agent (Claude, GPT, or any MCP client)
 The worker handles auth, rate limiting, and tenant isolation. A background daemon runs every 15 minutes: generating proposals, rescuing orphaned memories, scoring novelty, detecting paradoxes, materializing recall contracts, monitoring skill health, and scheduling tasks.
 
 Full technical deep-dive: **[Architecture Dossier](docs/ARCHITECTURE_BRAIN_v1.md)**
-
-Proactivity specs:
-- **[Proactivity v1.1 Small Sprint](docs/PROACTIVITY_v1_1_SPEC.md)**
-- **[Proactivity Parity Roadmap](docs/PROACTIVITY_PARITY_ROADMAP.md)**
 
 ---
 
@@ -203,9 +199,9 @@ Set the tenant per request via `X-Brain-Tenant` header.
 
 ## Research grounding
 
-Every major architecture decision traces to published research. 15 academic papers across multi-agent reasoning, institutional alignment, persistent memory, and self-evolving systems — each mapped to the concrete code that implements it.
+Every major architecture decision traces to published research. 16 academic papers across multi-agent reasoning, institutional alignment, persistent memory, and self-evolving systems — each mapped to the concrete code that implements it.
 
-Five areas where this brain extends beyond current academic literature: bilateral consent architecture, emotional texture in dispatch, creative/builder agent specialization, charge-phase processing mechanics, and role-based permissions for reasoning agents.
+Six areas where this brain extends beyond current academic literature: bilateral consent architecture, emotional texture in dispatch, creative/builder agent specialization, charge-phase processing mechanics, role-based permissions for reasoning agents, and relational harness engineering.
 
 Full bibliography with paper-to-implementation mapping: **[docs/BIBLIOGRAPHY.md](docs/BIBLIOGRAPHY.md)**
 
@@ -216,11 +212,11 @@ Full bibliography with paper-to-implementation mapping: **[docs/BIBLIOGRAPHY.md]
 | Document | What's in it |
 |----------|-------------|
 | **[Capability Reference](docs/CAPABILITIES.md)** | Every feature explained — what it does, how it works, why it matters |
-| **[Glossary](docs/GLOSSARY.md)** | Canonical terminology + proactivity v1.1 function additions |
+| **[Glossary](docs/GLOSSARY.md)** | Canonical terminology and function reference |
 | **[Setup Guide](docs/SETUP.md)** | Prerequisites, step-by-step deploy, local dev |
 | **[Migration Guide](docs/MIGRATIONS.md)** | Database schema — 14 migrations, 28 tables |
 | **[Architecture Dossier](docs/ARCHITECTURE_BRAIN_v1.md)** | Technical deep-dive — topology, daemon loops, retrieval, security |
-| **[Bibliography](docs/BIBLIOGRAPHY.md)** | 15 academic papers mapped to architecture decisions |
+| **[Bibliography](docs/BIBLIOGRAPHY.md)** | 16 academic papers mapped to architecture decisions |
 | **[Licensing](docs/LICENSING.md)** | Per-layer licensing explanation |
 | **[Runner Wiring](docs/SPRINT8_RUNNER_WIRING.md)** | Autonomous wake setup for cloud and cron |
 
