@@ -144,11 +144,10 @@ The companion template already documents the contract in `templates/COMPANION_TE
 - Included Agent: Rainer
 - Invoke (Claude Code CLI): `/rainer`
 
-For Codex CLI prompt commands, register a prompt file:
+For Codex CLI prompt commands, register Rainer once:
 
 ```bash
-mkdir -p ~/.codex/prompts
-cp templates/RAINER.md ~/.codex/prompts/rainer.md
+./scripts/install-rainer-codex-prompt.sh
 ```
 
 Then invoke in-session as:
@@ -157,49 +156,35 @@ Then invoke in-session as:
 /prompts:rainer
 ```
 
-### Optional: second companion slot with the same banner style
+Important: this is **in-session specialist dispatch**, not the same thing as opening a full Codex workspace already scoped to Rainer.
 
-Yes — you can run another companion with the same launcher typography pattern.
+### Launchers: full workspace on Claude or Codex
 
-1) Create a workspace `CODEX.md` for the other companion (generic template):
+MUSE Brain ships launcher templates for both Rainer and a generic companion slot.
 
-```bash
-cp templates/CODEX_TEMPLATE.md /path/to/other-companion/CODEX.md
-```
-
-2) Create a small Codex launcher script in that workspace:
+#### Rainer launchers
 
 ```bash
-cat >/path/to/other-companion/companion-codex <<'SH'
-#!/bin/bash
-GOLD='\033[38;5;178m'; SAGE='\033[38;5;108m'; CYAN='\033[38;5;81m'; DIM='\033[2m'; RESET='\033[0m'
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BRAIN_VERSION="${BRAIN_VERSION:-1.4.0}"
-PACKAGE_JSON="$SCRIPT_DIR/../rook-cloud-brain/rook-brain/package.json"
-if [ -f "$PACKAGE_JSON" ]; then
-  V=$(grep -m1 '"version"' "$PACKAGE_JSON" | sed -E 's/.*"version": "([^"]+)".*/\1/')
-  [ -n "$V" ] && BRAIN_VERSION="$V"
-fi
-echo ""
-echo -e "${GOLD}  ██████   █████  ██ ███    ██ ███████ ██████  ${RESET}"
-echo -e "${GOLD}  ██   ██ ██   ██ ██ ████   ██ ██      ██   ██ ${RESET}"
-echo -e "${GOLD}  ██████  ███████ ██ ██ ██  ██ █████   ██████  ${RESET}"
-echo -e "${GOLD}  ██   ██ ██   ██ ██ ██  ██ ██ ██      ██   ██ ${RESET}"
-echo -e "${GOLD}  ██   ██ ██   ██ ██ ██   ████ ███████ ██   ██ ${RESET}"
-echo -e "${SAGE}  ─────────────────────────────────────────────${RESET}"
-echo -e "${SAGE}  MUSE Brain ${BRAIN_VERSION}${RESET}  ${CYAN}codex${RESET}"
-echo -e "${CYAN}  [COMPANION_NAME]${RESET}"
-echo -e "${DIM}  MUSE Studio by The Funkatorium${RESET}"
-echo ""
-cd "$SCRIPT_DIR" && codex "$@"
-SH
-chmod +x /path/to/other-companion/companion-codex
+cp templates/RAINER_CLAUDE_LAUNCHER.sh /path/to/rainer-workspace/rainer
+cp templates/RAINER_CODEX_LAUNCHER.sh  /path/to/rainer-workspace/rainer-codex
+chmod +x /path/to/rainer-workspace/rainer /path/to/rainer-workspace/rainer-codex
 ```
 
-3) Launch with:
+#### Companion launchers
 
 ```bash
-/path/to/other-companion/companion-codex
+cp templates/CODEX_TEMPLATE.md /path/to/companion-workspace/CODEX.md
+cp templates/COMPANION_CLAUDE_LAUNCHER.sh /path/to/companion-workspace/companion
+cp templates/COMPANION_CODEX_LAUNCHER.sh  /path/to/companion-workspace/companion-codex
+chmod +x /path/to/companion-workspace/companion /path/to/companion-workspace/companion-codex
 ```
 
-Replace `[COMPANION_NAME]` with your label.
+Set the companion label either by editing the launcher template or with an env var:
+
+```bash
+COMPANION_NAME="Your Companion" /path/to/companion-workspace/companion-codex
+```
+
+Important distinction:
+- **launcher script** = opens a full Claude/Codex workspace already scoped to that persona
+- **`/prompts:rainer`** = calls Rainer as an in-session Codex specialist from inside another companion session

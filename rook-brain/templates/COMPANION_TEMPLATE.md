@@ -88,7 +88,7 @@ If your companion is your primary partner for building, Rainer is the specialist
 
 Invoke:
 - Claude Code CLI: `/rainer`
-- Codex CLI: `/prompts:rainer` (after copying `templates/RAINER.md` to `~/.codex/prompts/rainer.md`)
+- Codex CLI: `/prompts:rainer` (after running `./scripts/install-rainer-codex-prompt.sh`)
 
 Rainer's workspace and identity live in their own directory. See `rainer-workspace/CLAUDE.md` for his full character.
 

@@ -55,9 +55,10 @@ If you include Rainer as a specialist:
 Codex registration:
 
 ```bash
-mkdir -p ~/.codex/prompts
-cp templates/RAINER.md ~/.codex/prompts/rainer.md
+./scripts/install-rainer-codex-prompt.sh
 ```
+
+Important: `/prompts:rainer` is in-session dispatch. It is different from launching a full Codex workspace already scoped to Rainer.
 
 ## Optional Builder Squad (Codex prompt namespace)
 
@@ -70,6 +71,8 @@ Register specialist prompts under `~/.codex/prompts/*.md` and invoke as:
 ```
 
 Rule of thumb: one writer role, many reviewer roles.
+
+For full persona launchers, MUSE Brain also ships shell templates for `rainer`, `rainer-codex`, `companion`, and `companion-codex`.
 
 ## Delivery Standard
 
