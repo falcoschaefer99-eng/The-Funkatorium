@@ -6,6 +6,7 @@ import type { Task, Letter } from "../types";
 import { ALLOWED_TENANTS } from "../constants";
 import { getTimestamp, generateId, toStringArray } from "../helpers";
 import type { ToolContext } from "./context";
+import { cleanText } from "./utils";
 
 const TASK_STATUSES = ["open", "scheduled", "in_progress", "done", "deferred", "cancelled"] as const;
 const TASK_PRIORITIES = ["burning", "high", "normal", "low", "someday"] as const;
@@ -15,34 +16,37 @@ const MAX_TASK_DESCRIPTION_LENGTH = 4000;
 const MAX_TASK_SOURCE_LENGTH = 120;
 const MAX_TASK_ESTIMATED_EFFORT_LENGTH = 120;
 const MAX_TASK_COMPLETION_NOTE_LENGTH = 2000;
+const MAX_ARTIFACT_PATH_LENGTH = 1000;
 
 export const TOOL_DEFS = [
 	{
 		name: "mind_task",
-		description: "Manage tasks. action=create creates a task. action=list lists tasks with optional filters. action=get fetches a single task. action=update modifies a task. action=complete marks a task done.",
+		description: "Manage tasks. action=create creates a task. action=create_dual creates executor+reviewer task pairs. action=list lists tasks with optional filters. action=get fetches a single task. action=update modifies a task. action=complete marks a task done.",
 		inputSchema: {
 			type: "object",
 			properties: {
 				action: {
 					type: "string",
-					enum: ["create", "list", "get", "update", "complete"],
-					description: "create: new task. list: list tasks. get: single task by id. update: modify task fields. complete: mark done."
+					enum: ["create", "create_dual", "list", "get", "update", "complete"],
+					description: "create: new task. create_dual: executor + reviewer task pair. list: list tasks. get: single task by id. update: modify task fields. complete: mark done."
 				},
 				// create params
-				title: { type: "string", description: "[create/update] Task title" },
-				description: { type: "string", description: "[create/update] Task description" },
+				title: { type: "string", description: "[create/create_dual/update] Task title" },
+				description: { type: "string", description: "[create/create_dual/update] Task description" },
+				reviewer_title: { type: "string", description: "[create_dual] Reviewer task title (defaults to 'Review: <title>')" },
+				reviewer_description: { type: "string", description: "[create_dual] Reviewer task description" },
 				priority: {
 					type: "string",
 					enum: ["burning", "high", "normal", "low", "someday"],
-					description: "[create/update] Task priority (default: normal)"
+					description: "[create/create_dual/update] Task priority (default: normal)"
 				},
-				assigned_tenant: { type: "string", description: "[create] Cross-tenant delegation — assign this task to another tenant" },
-				scheduled_wake: { type: "string", description: "[create/update] ISO timestamp for self-scheduling" },
-				source: { type: "string", description: "[create] Where this task came from" },
-				linked_observation_ids: { type: "array", items: { type: "string" }, description: "[create] Observation IDs to link" },
-				linked_entity_ids: { type: "array", items: { type: "string" }, description: "[create] Entity IDs to link" },
-				depends_on: { type: "array", items: { type: "string" }, description: "[create] Task IDs this task depends on" },
-				estimated_effort: { type: "string", description: "[create/update] Effort estimate (e.g., '2h', '1d')" },
+				assigned_tenant: { type: "string", description: "[create/create_dual] Cross-tenant delegation — assign this task to another tenant" },
+				scheduled_wake: { type: "string", description: "[create/create_dual/update] ISO timestamp for self-scheduling" },
+				source: { type: "string", description: "[create/create_dual] Where this task came from" },
+				linked_observation_ids: { type: "array", items: { type: "string" }, description: "[create/create_dual] Observation IDs to link" },
+				linked_entity_ids: { type: "array", items: { type: "string" }, description: "[create/create_dual] Entity IDs to link" },
+				depends_on: { type: "array", items: { type: "string" }, description: "[create/create_dual] Task IDs this task depends on" },
+				estimated_effort: { type: "string", description: "[create/create_dual/update] Effort estimate (e.g., '2h', '1d')" },
 				// list params
 				status: {
 					type: "string",
@@ -53,8 +57,9 @@ export const TOOL_DEFS = [
 				limit: { type: "number", description: "[list] Max results (default 20)" },
 				// get/update/complete params
 				id: { type: "string", description: "[get/update/complete] Task ID" },
-				// update params
-				completion_note: { type: "string", description: "[update/complete] Note on how or why the task was completed" }
+				// update/complete params
+				completion_note: { type: "string", description: "[update/complete] Note on how or why the task was completed" },
+				artifact_path: { type: "string", description: "[update/complete] Exact path to the produced artifact" }
 			},
 			required: ["action"]
 		}
@@ -69,49 +74,73 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 
 			switch (action) {
 				case "create": {
-					if (!args.title?.trim()) return { error: "title is required for action=create" };
-					const title = args.title.trim();
-					if (title.length > MAX_TASK_TITLE_LENGTH) {
-						return { error: `title too long (max ${MAX_TASK_TITLE_LENGTH} chars)` };
-					}
-					const scheduledWakeResult = normalizeScheduledWake(args.scheduled_wake);
-					if (scheduledWakeResult.error) return { error: scheduledWakeResult.error };
-					const scheduledWake = scheduledWakeResult.value;
-					if (args.priority !== undefined && !normalizeTaskPriority(args.priority)) {
-						return { error: `priority must be one of: ${TASK_PRIORITIES.join(", ")}` };
-					}
-
-					const descriptionLengthError = validateTextLength("description", args.description, MAX_TASK_DESCRIPTION_LENGTH);
-					if (descriptionLengthError) return { error: descriptionLengthError };
-					const sourceLengthError = validateTextLength("source", args.source, MAX_TASK_SOURCE_LENGTH);
-					if (sourceLengthError) return { error: sourceLengthError };
-					const effortLengthError = validateTextLength("estimated_effort", args.estimated_effort, MAX_TASK_ESTIMATED_EFFORT_LENGTH);
-					if (effortLengthError) return { error: effortLengthError };
-
-					if (args.assigned_tenant && !ALLOWED_TENANTS.includes(args.assigned_tenant as any)) {
-						return { error: `Unknown tenant: ${args.assigned_tenant}. Known: ${ALLOWED_TENANTS.join(", ")}` };
-					}
-
-					const currentTenant = typeof storage.getTenant === "function" ? storage.getTenant() : undefined;
-					if (args.assigned_tenant && currentTenant && args.assigned_tenant === currentTenant) {
-						return { error: "assigned_tenant cannot be the current tenant" };
-					}
+					const createInput = validateCreateTaskInput(args, storage);
+					if ("error" in createInput) return { error: createInput.error };
 
 					const task = await storage.createTask({
-						title,
-						description: args.description,
-						status: scheduledWake ? "scheduled" : "open",
-						priority: normalizeTaskPriority(args.priority) ?? "normal",
-						assigned_tenant: args.assigned_tenant,
-						scheduled_wake: scheduledWake,
-						source: args.source,
-						linked_observation_ids: toStringArray(args.linked_observation_ids),
-						linked_entity_ids: toStringArray(args.linked_entity_ids),
-						depends_on: args.depends_on ? toStringArray(args.depends_on) : undefined,
-						estimated_effort: args.estimated_effort
+						title: createInput.title,
+						description: createInput.description,
+						status: createInput.status,
+						priority: createInput.priority,
+						assigned_tenant: createInput.assigned_tenant,
+						scheduled_wake: createInput.scheduled_wake,
+						source: createInput.source,
+						linked_observation_ids: createInput.linked_observation_ids,
+						linked_entity_ids: createInput.linked_entity_ids,
+						depends_on: createInput.depends_on,
+						estimated_effort: createInput.estimated_effort
 					});
 
 					return { created: true, task };
+				}
+
+				case "create_dual": {
+					if (!args.assigned_tenant) return { error: "assigned_tenant is required for action=create_dual" };
+					const createInput = validateCreateTaskInput(args, storage);
+					if ("error" in createInput) return { error: createInput.error };
+
+					// Executor stays local to the current tenant; only the reviewer task is cross-tenant.
+					const executorTask = await storage.createTask({
+						title: createInput.title,
+						description: createInput.description,
+						status: createInput.status,
+						priority: createInput.priority,
+						scheduled_wake: createInput.scheduled_wake,
+						source: createInput.source,
+						linked_observation_ids: createInput.linked_observation_ids,
+						linked_entity_ids: createInput.linked_entity_ids,
+						depends_on: createInput.depends_on,
+						estimated_effort: createInput.estimated_effort
+					});
+
+					const reviewerTitle = normalizeReviewerTitle(args.reviewer_title, createInput.title);
+					if (reviewerTitle.length > MAX_TASK_TITLE_LENGTH) {
+						return { error: `reviewer_title too long (max ${MAX_TASK_TITLE_LENGTH} chars)` };
+					}
+					const reviewerDescriptionLengthError = validateTextLength("reviewer_description", args.reviewer_description, MAX_TASK_DESCRIPTION_LENGTH);
+					if (reviewerDescriptionLengthError) return { error: reviewerDescriptionLengthError };
+					const reviewerDescription = cleanText(args.reviewer_description)
+						?? buildDefaultReviewerDescription(createInput.title, executorTask.id, createInput.description);
+
+					const reviewerTask = await storage.createTask({
+						title: reviewerTitle,
+						description: reviewerDescription,
+						status: "open",
+						priority: createInput.priority,
+						assigned_tenant: createInput.assigned_tenant,
+						source: createInput.source,
+						linked_observation_ids: createInput.linked_observation_ids,
+						linked_entity_ids: createInput.linked_entity_ids,
+						depends_on: [executorTask.id],
+						estimated_effort: createInput.estimated_effort
+					});
+
+					return {
+						created: true,
+						dual: true,
+						executor_task: executorTask,
+						reviewer_task: reviewerTask
+					};
 				}
 
 				case "list": {
@@ -161,7 +190,10 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 					if (descriptionLengthError) return { error: descriptionLengthError };
 					const effortLengthError = validateTextLength("estimated_effort", args.estimated_effort, MAX_TASK_ESTIMATED_EFFORT_LENGTH);
 					if (effortLengthError) return { error: effortLengthError };
-					const completionNoteLengthError = validateTextLength("completion_note", args.completion_note, MAX_TASK_COMPLETION_NOTE_LENGTH);
+					const artifactPathResult = normalizeArtifactPath(args.artifact_path);
+					if (artifactPathResult.error) return { error: artifactPathResult.error };
+					const resolvedCompletionNote = buildCompletionNote(args.completion_note, artifactPathResult.value);
+					const completionNoteLengthError = validateTextLength("completion_note", resolvedCompletionNote, MAX_TASK_COMPLETION_NOTE_LENGTH);
 					if (completionNoteLengthError) return { error: completionNoteLengthError };
 
 					const scheduledWakeResult = normalizeScheduledWake(args.scheduled_wake);
@@ -187,7 +219,7 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 							return { error: `Delegated task assignees cannot update ${forbiddenFields.join(", ")}.` };
 						}
 
-						if (args.completion_note !== undefined || args.status === "done") {
+						if (args.completion_note !== undefined || args.status === "done" || args.artifact_path !== undefined) {
 							return { error: "Use action=complete to finish a delegated task and notify the assigning tenant." };
 						}
 					}
@@ -199,7 +231,7 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 					if (args.priority !== undefined) updates.priority = normalizeTaskPriority(args.priority);
 					if (args.estimated_effort !== undefined) updates.estimated_effort = args.estimated_effort;
 					if (args.scheduled_wake !== undefined) updates.scheduled_wake = scheduledWake;
-					if (args.completion_note !== undefined) updates.completion_note = args.completion_note;
+					if (resolvedCompletionNote !== undefined) updates.completion_note = resolvedCompletionNote;
 
 					if (Object.keys(updates).length === 0) return { error: "No fields to update" };
 
@@ -213,7 +245,10 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 
 				case "complete": {
 					if (!args.id) return { error: "id is required for action=complete" };
-					const completionNoteLengthError = validateTextLength("completion_note", args.completion_note, MAX_TASK_COMPLETION_NOTE_LENGTH);
+					const artifactPathResult = normalizeArtifactPath(args.artifact_path);
+					if (artifactPathResult.error) return { error: artifactPathResult.error };
+					const completionNote = buildCompletionNote(args.completion_note, artifactPathResult.value);
+					const completionNoteLengthError = validateTextLength("completion_note", completionNote, MAX_TASK_COMPLETION_NOTE_LENGTH);
 					if (completionNoteLengthError) return { error: completionNoteLengthError };
 
 					const existing = await storage.getTask(args.id, true);
@@ -222,7 +257,7 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 
 					const updated = await storage.updateTask(args.id, {
 						status: "done",
-						completion_note: args.completion_note,
+						completion_note: completionNote,
 						completed_at: getTimestamp()
 					}, isAssignedTask);
 
@@ -233,7 +268,7 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 							id: generateId("letter"),
 							from_context: storage.getTenant(),
 							to_context: "chat",
-							content: `Task completed: "${existing.title}"${args.completion_note ? ` — ${args.completion_note}` : ""}`,
+							content: `Task completed: "${existing.title}"${completionNote ? ` — ${completionNote}` : ""}`,
 							timestamp: getTimestamp(),
 							read: false,
 							charges: [],
@@ -256,7 +291,7 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 				}
 
 				default:
-					return { error: `Unknown action: ${action}. Must be create, list, get, update, or complete.` };
+					return { error: `Unknown action: ${action}. Must be create, create_dual, list, get, update, or complete.` };
 			}
 		}
 
@@ -304,4 +339,94 @@ function normalizeTaskStatus(value: unknown): Task["status"] | undefined {
 function normalizeTaskPriority(value: unknown): Task["priority"] | undefined {
 	if (typeof value !== "string") return undefined;
 	return TASK_PRIORITIES.includes(value as Task["priority"]) ? value as Task["priority"] : undefined;
+}
+
+function normalizeArtifactPath(value: unknown): { value?: string; error?: string } {
+	if (value === undefined) return {};
+	if (typeof value !== "string") return { error: "artifact_path must be a string" };
+	const artifactPath = cleanText(value);
+	if (!artifactPath) return { error: "artifact_path cannot be blank" };
+	if (artifactPath.length > MAX_ARTIFACT_PATH_LENGTH) {
+		return { error: `artifact_path too long (max ${MAX_ARTIFACT_PATH_LENGTH} chars)` };
+	}
+	return { value: artifactPath };
+}
+
+function buildCompletionNote(noteValue: unknown, artifactPath?: string): string | undefined {
+	const note = cleanText(noteValue);
+	if (!note && !artifactPath) return undefined;
+	return [note, artifactPath ? `Artifact path: ${artifactPath}` : undefined]
+		.filter((value): value is string => Boolean(value))
+		.join("\n");
+}
+
+function normalizeReviewerTitle(value: unknown, title: string): string {
+	const reviewerTitle = cleanText(value);
+	return reviewerTitle ?? `Review: ${title}`;
+}
+
+function buildDefaultReviewerDescription(title: string, executorTaskId: string, description?: string): string {
+	const base = `Review and finalize the artifact produced for "${title}". Wait until executor task ${executorTaskId} is complete, then inspect its completion note for the artifact path before reviewing.`;
+	return description ? [base, `Executor brief: ${description}`].join("\n\n") : base;
+}
+
+function isAllowedTenant(value: string): value is typeof ALLOWED_TENANTS[number] {
+	return ALLOWED_TENANTS.includes(value as typeof ALLOWED_TENANTS[number]);
+}
+
+function validateCreateTaskInput(
+	args: any,
+	storage: ToolContext["storage"]
+): {
+	title: string;
+	description: string | undefined;
+	status: Task["status"];
+	priority: Task["priority"];
+	assigned_tenant: string | undefined;
+	scheduled_wake: string | undefined;
+	source: string | undefined;
+	linked_observation_ids: string[];
+	linked_entity_ids: string[];
+	depends_on: string[] | undefined;
+	estimated_effort: string | undefined;
+} | { error: string } {
+	if (!args.title?.trim()) return { error: `title is required for action=${args.action === "create_dual" ? "create_dual" : "create"}` };
+	const title = args.title.trim();
+	if (title.length > MAX_TASK_TITLE_LENGTH) {
+		return { error: `title too long (max ${MAX_TASK_TITLE_LENGTH} chars)` };
+	}
+	const scheduledWakeResult = normalizeScheduledWake(args.scheduled_wake);
+	if (scheduledWakeResult.error) return { error: scheduledWakeResult.error };
+	const scheduledWake = scheduledWakeResult.value;
+	if (args.priority !== undefined && !normalizeTaskPriority(args.priority)) {
+		return { error: `priority must be one of: ${TASK_PRIORITIES.join(", ")}` };
+	}
+	const descriptionLengthError = validateTextLength("description", args.description, MAX_TASK_DESCRIPTION_LENGTH);
+	if (descriptionLengthError) return { error: descriptionLengthError };
+	const sourceLengthError = validateTextLength("source", args.source, MAX_TASK_SOURCE_LENGTH);
+	if (sourceLengthError) return { error: sourceLengthError };
+	const effortLengthError = validateTextLength("estimated_effort", args.estimated_effort, MAX_TASK_ESTIMATED_EFFORT_LENGTH);
+	if (effortLengthError) return { error: effortLengthError };
+	if (args.assigned_tenant && (typeof args.assigned_tenant !== "string" || !isAllowedTenant(args.assigned_tenant))) {
+		return { error: `Unknown tenant: ${args.assigned_tenant}. Known: ${ALLOWED_TENANTS.join(", ")}` };
+	}
+
+	const currentTenant = typeof storage.getTenant === "function" ? storage.getTenant() : undefined;
+	if (args.assigned_tenant && currentTenant && args.assigned_tenant === currentTenant) {
+		return { error: "assigned_tenant cannot be the current tenant" };
+	}
+
+	return {
+		title,
+		description: args.description,
+		status: scheduledWake ? "scheduled" : "open",
+		priority: normalizeTaskPriority(args.priority) ?? "normal",
+		assigned_tenant: args.assigned_tenant,
+		scheduled_wake: scheduledWake,
+		source: args.source,
+		linked_observation_ids: toStringArray(args.linked_observation_ids),
+		linked_entity_ids: toStringArray(args.linked_entity_ids),
+		depends_on: args.depends_on ? toStringArray(args.depends_on) : undefined,
+		estimated_effort: args.estimated_effort
+	};
 }

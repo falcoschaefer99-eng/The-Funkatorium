@@ -47,6 +47,13 @@ type IntentionPulse = {
 	summary_lines: string[];
 };
 
+type WorkspaceRouting = {
+	local_workspace?: string;
+	shared_workspace?: string;
+	peer_workspace?: string;
+	artifact_workspace?: string;
+};
+
 const INTENTION_STALE_TASK_HOURS = 24;
 const INTENTION_STALE_PROJECT_HOURS = 72;
 const INTENTION_TASK_SCAN_LIMIT = 200;
@@ -364,10 +371,13 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 						? await storage.listTasks("open", undefined, previewLimit.value, includeAssigned)
 						: [];
 
-					const delegatedOpenTasks = openTasks.filter(task =>
+					const runnableOpenTasks = await filterRunnableTasks(storage, openTasks);
+					const delegatedOpenTasks = runnableOpenTasks.filter(task =>
 						task.assigned_tenant === agentTenant && task.tenant_id !== agentTenant
 					);
-					const recommendedTask = pickRecommendedTask(openTasks, agentTenant);
+					const blockedOpenTaskCount = openTasks.length - runnableOpenTasks.length;
+					const recommendedTask = pickRecommendedTask(runnableOpenTasks, agentTenant);
+					const workspaceRouting = extractWorkspaceRouting(metadataResult.value, agentTenant);
 
 					let highPriorityPending = 0;
 					if (wakeKind === "impulse" && policy.require_priority_clear_for_impulse) {
@@ -426,6 +436,8 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 							wake_kind: wakeKind,
 							due_opened: dueOpened,
 							open_task_count: openTasks.length,
+							runnable_open_task_count: runnableOpenTasks.length,
+							blocked_open_task_count: blockedOpenTaskCount,
 							delegated_open_count: delegatedOpenTasks.length,
 							priority_pending: highPriorityPending,
 							policy_mode: policy.execution_mode,
@@ -515,6 +527,8 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 						wake_kind: wakeKind,
 						due_opened: dueOpened,
 						open_task_count: openTasks.length,
+						runnable_open_task_count: runnableOpenTasks.length,
+						blocked_open_task_count: blockedOpenTaskCount,
 						delegated_open_task_count: delegatedOpenTasks.length,
 						high_priority_pending: highPriorityPending,
 						policy,
@@ -535,8 +549,9 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 							resume_session_id: resolvedSessionId,
 							context_retrieval_policy: contextRetrievalPolicy,
 							intention_pulse: intentionPulse,
+							workspace_routing: workspaceRouting,
 							task: selectedTask,
-							prompt: selectedTask ? buildAutonomousTaskPrompt(selectedTask, agentTenant, wakeKind, policy, contextRetrievalPolicy, intentionPulse) : undefined
+							prompt: selectedTask ? buildAutonomousTaskPrompt(selectedTask, agentTenant, wakeKind, policy, contextRetrievalPolicy, intentionPulse, workspaceRouting) : undefined
 						},
 						open_tasks_preview: openTasks,
 						run,
@@ -562,10 +577,14 @@ function resolveAgentTenant(storage: ToolContext["storage"], value: unknown): { 
 	if (typeof value !== "string") return { error: "agent_tenant must be a string" };
 	const cleaned = value.trim();
 	if (!cleaned) return { error: "agent_tenant cannot be blank" };
-	if (!ALLOWED_TENANTS.includes(cleaned as any)) {
+	if (!isAllowedTenant(cleaned)) {
 		return { error: `Unknown tenant: ${cleaned}. Known: ${ALLOWED_TENANTS.join(", ")}` };
 	}
 	return { value: cleaned };
+}
+
+function isAllowedTenant(value: string): value is typeof ALLOWED_TENANTS[number] {
+	return ALLOWED_TENANTS.includes(value as typeof ALLOWED_TENANTS[number]);
 }
 
 function normalizeTriggerMode(value: unknown): AgentRuntimeSession["trigger_mode"] | undefined {
@@ -725,6 +744,52 @@ function isDelegatedTaskForAgent(task: Task, agentTenant: string): boolean {
 	return task.assigned_tenant === agentTenant && task.tenant_id !== agentTenant;
 }
 
+function firstCleanText(...values: unknown[]): string | undefined {
+	for (const value of values) {
+		const cleaned = cleanText(value);
+		if (cleaned) return cleaned;
+	}
+	return undefined;
+}
+
+async function filterRunnableTasks(storage: ToolContext["storage"], tasks: Task[]): Promise<Task[]> {
+	if (typeof storage.getTask !== "function") return tasks;
+	const runnable: Task[] = [];
+	for (const task of tasks) {
+		if (await isTaskRunnable(storage, task)) runnable.push(task);
+	}
+	return runnable;
+}
+
+async function isTaskRunnable(storage: ToolContext["storage"], task: Task): Promise<boolean> {
+	if (!task.depends_on || task.depends_on.length === 0) return true;
+	if (typeof storage.getTask !== "function") return true;
+	for (const dependencyId of task.depends_on) {
+		const cleanDependencyId = cleanText(dependencyId);
+		if (!cleanDependencyId) continue;
+		const dependency = await storage.getTask(cleanDependencyId, true);
+		if (!dependency || dependency.status !== "done") return false;
+	}
+	return true;
+}
+
+function extractWorkspaceRouting(metadata: Record<string, unknown>, agentTenant: string): WorkspaceRouting | undefined {
+	const peerTenant = ALLOWED_TENANTS.find(tenant => tenant !== agentTenant);
+	const routing: WorkspaceRouting = {
+		local_workspace: firstCleanText(metadata[`${agentTenant}_workspace`], metadata.local_workspace, metadata.workspace),
+		shared_workspace: firstCleanText(metadata.shared_workspace, metadata.collaboration_workspace),
+		peer_workspace: firstCleanText(
+			metadata.peer_workspace,
+			metadata.reviewer_workspace,
+			metadata.companion_workspace,
+			peerTenant ? metadata[`${peerTenant}_workspace`] : undefined
+		),
+		artifact_workspace: firstCleanText(metadata.artifact_workspace, metadata.output_workspace, metadata.output_dir)
+	};
+
+	return Object.values(routing).some(Boolean) ? routing : undefined;
+}
+
 function pickRecommendedTask(tasks: Task[], agentTenant: string): Task | undefined {
 	const delegated = tasks.filter(task => isDelegatedTaskForAgent(task, agentTenant));
 	const pool = delegated.length > 0 ? delegated : tasks;
@@ -752,7 +817,8 @@ function buildAutonomousTaskPrompt(
 	wakeKind: WakeKind,
 	policy?: AgentRuntimePolicy,
 	contextPolicy?: ContextRetrievalPolicy,
-	intentionPulse?: IntentionPulse
+	intentionPulse?: IntentionPulse,
+	workspaceRouting?: WorkspaceRouting
 ): string {
 	const delegated = isDelegatedTaskForAgent(task, agentTenant);
 	const lines: string[] = [
@@ -768,6 +834,9 @@ function buildAutonomousTaskPrompt(
 	if (task.estimated_effort) {
 		lines.push(`Estimated effort: ${task.estimated_effort}`);
 	}
+	if (task.depends_on?.length) {
+		lines.push(`Dependencies: ${task.depends_on.join(", ")}`);
+	}
 	lines.push(
 		delegated
 			? `Delegation: assigned to ${agentTenant} by ${task.tenant_id}.`
@@ -776,21 +845,35 @@ function buildAutonomousTaskPrompt(
 		"Execution protocol:",
 		"1) Do only what is needed to complete this task.",
 		"2) Keep tool usage lean; avoid side quests.",
-		"3) Mark completion with mind_task action=complete using the same task id.",
-		"4) Include a concise completion_note with concrete outcomes."
+		"3) Respect task dependencies; if anything this task depends on is incomplete, stop and resolve the block first.",
+		"4) If this task produces or revises a deliverable, write the actual artifact to the designated workspace instead of only describing it.",
+		"5) Mark completion with mind_task action=complete using the same task id.",
+		"6) Include a concise completion_note with concrete outcomes, and include the exact artifact path via artifact_path (or in the completion_note if artifact_path is unavailable)."
 	);
+
+	if (delegated && task.depends_on?.length) {
+		lines.push("- For delegated review or follow-up work, inspect dependency completion notes first so you inherit the artifact path before editing.");
+	}
+
+	if (workspaceRouting) {
+		lines.push("", "Workspace routing:");
+		if (workspaceRouting.local_workspace) lines.push(`- Local workspace: ${workspaceRouting.local_workspace}`);
+		if (workspaceRouting.shared_workspace) lines.push(`- Shared workspace: ${workspaceRouting.shared_workspace}`);
+		if (workspaceRouting.peer_workspace) lines.push(`- Peer workspace: ${workspaceRouting.peer_workspace}`);
+		if (workspaceRouting.artifact_workspace) lines.push(`- Artifact workspace: ${workspaceRouting.artifact_workspace}`);
+	}
 
 	if (policy) {
 		lines.push(
-			`5) Stay within runtime budget: max_tool_calls_per_run=${policy.max_tool_calls_per_run}, max_parallel_delegations=${policy.max_parallel_delegations}.`,
-			`6) Execution mode: ${policy.execution_mode} (be proportionate).`
+			`- Runtime budget: max_tool_calls_per_run=${policy.max_tool_calls_per_run}, max_parallel_delegations=${policy.max_parallel_delegations}.`,
+			`- Execution mode: ${policy.execution_mode} (be proportionate).`
 		);
 	}
 
 	if (contextPolicy) {
 		lines.push(
-			`7) Pull context with confidence-gated retrieval: confidence_threshold=${contextPolicy.confidence_threshold}, shadow_mode=${contextPolicy.shadow_mode}, max_context_items=${contextPolicy.max_context_items}.`,
-			`8) Apply recency boost controls: recency_boost_days=${contextPolicy.recency_boost_days}, recency_boost=${contextPolicy.recency_boost}.`
+			`- Pull context with confidence-gated retrieval: confidence_threshold=${contextPolicy.confidence_threshold}, shadow_mode=${contextPolicy.shadow_mode}, max_context_items=${contextPolicy.max_context_items}.`,
+			`- Apply recency boost controls: recency_boost_days=${contextPolicy.recency_boost_days}, recency_boost=${contextPolicy.recency_boost}.`
 		);
 	}
 

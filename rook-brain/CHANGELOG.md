@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 ## [1.4.0] — 2026-04-01
 
 ### Added
+- **Dual-task heartbeat** — `mind_task action=create_dual` creates executor/reviewer task pairs with reviewer dependency wiring out of the box
+- **Artifact completion contract** — `mind_task` now accepts `artifact_path` on update/complete and folds it into completion notes + delegated handoff letters
+- **Dependency-aware runtime selection** — `mind_runtime action=trigger` skips blocked tasks with unmet `depends_on` instead of surfacing work that cannot run yet
+- **Workspace routing in runner contracts** — autonomous prompts now include local/shared/peer/artifact workspace hints when trigger metadata provides them
 - **Autonomous runner** (`runner/`) — subscription-first execution layer with three provider backends:
   - Claude Code CLI (`claude -p`) — tested, working
   - Codex CLI (`codex exec`) — compiled, provider-ready

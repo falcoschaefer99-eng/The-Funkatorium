@@ -2,6 +2,8 @@
 
 Autonomous execution layer for MUSE Brain.
 
+The runner consumes the brain's runtime contract — task selection, dependency gating, workspace routing hints, and artifact handoff expectations — and turns that into an actual execution loop.
+
 This runner now supports **subscription-first execution** across both ecosystems:
 - **Claude Code** (`claude -p`)
 - **Codex CLI** (`codex exec`)
@@ -129,7 +131,7 @@ Each wake follows an explicit harness stage flow:
 3. `verify` (validation gates)
 4. `repair` (optional, bounded by `MAX_REPAIRS`)
 
-Every stage writes a JSON artifact, and `artifact-ledger.jsonl` records the run trail.
+Every stage writes a JSON artifact, and `artifact-ledger.jsonl` records the run trail. When the brain provides workspace routing hints and the executing agent produces a deliverable, the completion path should be written back through `mind_task complete` using `artifact_path` so review and notification flows can find the file again.
 
 After successful stage verification, S3 self-improvement runs:
 1. `mind_propose(action=list)` loads pending proposals

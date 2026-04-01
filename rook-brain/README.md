@@ -33,7 +33,7 @@ Ships with Rainer — a creative orchestrator ready to use out of the box (see `
 | **Persistent identity** | Identity cores, vows, and anchors survive across sessions. Your agent wakes up knowing who it is, what it believes, and what it's committed to. |
 | **Relationships** | Entity tracking for people, concepts, and other agents. Relational state. Bilateral consent boundaries your agent can enforce. |
 | **Deeper cognition** | A dream engine that finds surprising connections between memories. Subconscious surfacing. Paradox detection for unresolved tensions. Memories here aren't static — they metabolize. |
-| **Autonomous execution** | Runtime policies, scheduled wake cycles, duty and impulse triggers. Your agent runs tasks without you in the room. |
+| **Autonomous execution** | Runtime policies, scheduled wake cycles, duty and impulse triggers, dependency-aware task picking, workspace-aware runner contracts, and artifact completion handoffs. Your agent runs tasks without you in the room — and can tell you exactly where the finished work lives. |
 | **Self-learning** | Captured skill registry: skills emerge as candidates from successful runs, get reviewed, and either graduate to accepted or retire. Review-gated — no blind auto-learning. |
 | **Multi-mind** | Run two agents on one backend. Separate memories, separate identities, shared substrate. Cross-tenant letters and delegated tasks for genuine collaboration. |
 
@@ -154,7 +154,7 @@ Organized by what they do, not how they're built.
 | `mind_wake` | Wake the agent — quick, full, or orientation mode with circadian awareness |
 | `mind_wake_log` | Read or write wake session logs |
 | `mind_runtime` | Manage sessions, log runs, set policies, trigger autonomous cycles |
-| `mind_task` | Create, delegate, and track tasks across tenants with scheduled wake activation |
+| `mind_task` | Create, delegate, and track tasks across tenants with scheduled wake activation, dual executor/reviewer flows, and artifact-path handoffs |
 | `mind_project` | Project dossiers — goals, constraints, decisions, open questions |
 | `mind_skill` | Captured skill registry — list, review, promote, retire learned skills |
 
@@ -184,7 +184,10 @@ WAKE_KIND=duty \
 The runtime system supports:
 - **Duty wakes** — scheduled obligation cycles with task claiming
 - **Impulse wakes** — curiosity-driven exploration with cooldown budgets
+- **Dependency-aware task selection** — blocked tasks stay out of the wake lane until their prerequisites are done
 - **Intention pulse** — drift scan (tasks/loops/projects) injected into runner contracts
+- **Workspace routing** — local/shared/peer/artifact workspace hints flow into autonomous prompts
+- **Artifact handoff contract** — completions can carry exact artifact paths for review and notification
 - **Policy gates** — daily wake limits, max tool calls, priority-clear requirements
 - **Skill capture** — successful runs emit skill candidates for review
 

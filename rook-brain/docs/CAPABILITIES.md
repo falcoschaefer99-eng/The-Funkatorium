@@ -705,22 +705,23 @@ Every agent operates under a policy that constrains its autonomy:
 
 ### The trigger sequence
 
-When the runtime triggers, it walks through a 12-step evaluation:
+When the runtime triggers, it walks through a 13-step evaluation:
 
 1. Validate the trigger payload
 2. Load policy and daily usage counters
 3. Open any due scheduled tasks
 4. List all open tasks
-5. Compute **intention pulse** (drift scan across tasks, loops, and projects)
-6. Recommend a task (delegated-first — tasks from other agents get priority)
-7. Optionally auto-claim the selected task
-8. Evaluate duty vs. impulse policy gates
-9. Create a runtime run record
-10. Build and return a **runner contract**: `should_run`, selected task, execution prompt, session continuity ID, context retrieval policy, intention pulse
-11. Optionally emit a skill candidate artifact
-12. Update session continuity
+5. Filter out blocked tasks whose `depends_on` chain is not yet complete
+6. Compute **intention pulse** (drift scan across tasks, loops, and projects)
+7. Recommend a task (delegated-first — tasks from other agents get priority)
+8. Optionally auto-claim the selected task
+9. Evaluate duty vs. impulse policy gates
+10. Create a runtime run record
+11. Build and return a **runner contract**: `should_run`, selected task, execution prompt, session continuity ID, context retrieval policy, intention pulse, workspace routing
+12. Optionally emit a skill candidate artifact
+13. Update session continuity
 
-The runner contract is the runtime's output — a structured decision about whether the agent should execute, what it should work on, and how it should approach the task.
+The runner contract is the runtime's output — a structured decision about whether the agent should execute, what it should work on, how it should approach the task, and where the work should land when workspace hints are available.
 
 ### Intention pulse output
 
@@ -730,6 +731,17 @@ The trigger response includes:
 - `summary_lines` injected into the autonomous prompt
 
 This keeps runtime behavior proactive instead of purely reactive to whichever task happens to be selected first.
+
+### Workspace-aware execution
+
+When trigger metadata includes workspace hints, the runtime passes them through in `runner_contract.workspace_routing`:
+
+- `local_workspace`
+- `shared_workspace`
+- `peer_workspace`
+- `artifact_workspace`
+
+This gives autonomous wakes a canonical place to write deliverables and a shared lane for review flows.
 
 ### Session continuity
 
@@ -761,11 +773,27 @@ Tasks can be assigned across tenants. The assigned agent sees the task in their 
 
 One agent identifies work, delegates it to another, and tracks the outcome.
 
+### Dual-task collaboration
+
+`mind_task action=create_dual` creates a paired flow:
+
+1. **Executor task** stays local to the creating tenant
+2. **Reviewer task** is assigned cross-tenant
+3. Reviewer task automatically depends on the executor task
+
+This makes “draft, then proof” or “build, then critique” a first-class pattern instead of a manual convention.
+
 ### Scheduled wake activation
 
 Tasks with `scheduled_wake` set will be surfaced when that time arrives. The task-scheduling daemon advances overdue scheduled tasks to `open` status. Combined with the runtime system, this means an agent can schedule itself to do something next Tuesday and the system will surface that task at the right time.
 
-Task systems in AI are usually one-directional — the human creates, the AI executes. Here, tasks flow both directions: agents create tasks for themselves, delegate to other agents, and track completion.
+The runtime is dependency-aware: tasks with unmet `depends_on` prerequisites stay blocked until upstream work is complete. This prevents wake cycles from thrashing on work that cannot yet move.
+
+### Artifact handoff contract
+
+Task completion can include an `artifact_path`. The system appends that path into the completion note and reuses it in delegated handoff letters. That means the next agent — or the human — receives not just “done,” but “done, and the file is here.”
+
+Task systems in AI are usually one-directional — the human creates, the AI executes. Here, tasks flow both directions: agents create tasks for themselves, delegate to other agents, track completion, and pass concrete artifacts across the line.
 
 ---
 

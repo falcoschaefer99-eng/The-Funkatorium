@@ -481,4 +481,142 @@ describe('runtime v2 tool', () => {
 		expect(result.error).toMatch(/include_assigned must be a boolean/i);
 		expect(storage.openDueScheduledTasks).not.toHaveBeenCalled();
 	});
+
+
+	it('skips blocked tasks with unmet dependencies when picking the next wake task', async () => {
+		const openDueScheduledTasks = vi.fn(async () => 0);
+		const listTasks = vi.fn(async () => ([
+			{
+				id: 'task_blocked',
+				tenant_id: 'rainer',
+				priority: 'high',
+				created_at: '2026-03-28T08:00:00.000Z',
+				status: 'open',
+				title: 'blocked',
+				depends_on: ['dep_1']
+			},
+			{
+				id: 'task_ready',
+				tenant_id: 'rainer',
+				priority: 'normal',
+				created_at: '2026-03-28T09:00:00.000Z',
+				status: 'open',
+				title: 'ready'
+			}
+		]));
+		const getTask = vi.fn(async (id: string) => id === 'dep_1'
+			? { id: 'dep_1', tenant_id: 'rainer', status: 'open', title: 'dep', priority: 'normal', created_at: '2026-03-28T07:00:00.000Z' }
+			: null);
+		const createAgentRuntimeRun = vi.fn(async (payload: any) => ({
+			id: 'runtime_run_blocked',
+			tenant_id: 'rainer',
+			...payload,
+			created_at: '2026-03-28T17:00:01.000Z'
+		}));
+		const getAgentRuntimePolicy = vi.fn(async () => null);
+		const getAgentRuntimeUsage = vi.fn(async () => ({
+			agent_tenant: 'rainer',
+			since: '2026-03-28T00:00:00.000Z',
+			total_runs: 0,
+			duty_runs: 0,
+			impulse_runs: 0
+		}));
+		const getAgentRuntimeSession = vi.fn(async () => null);
+		const storage = {
+			getTenant: () => 'rainer',
+			getAgentRuntimePolicy,
+			getAgentRuntimeUsage,
+			getAgentRuntimeSession,
+			openDueScheduledTasks,
+			listTasks,
+			getTask,
+			createAgentRuntimeRun
+		};
+
+		const result = await handleRuntimeTool('mind_runtime', {
+			action: 'trigger',
+			wake_kind: 'duty',
+			now: '2026-03-28T17:00:00.000Z'
+		}, { storage: storage as any });
+
+		expect(result.triggered).toBe(true);
+		expect(result.runner_contract?.task?.id).toBe('task_ready');
+		expect(result.blocked_open_task_count).toBe(1);
+		expect(getTask).toHaveBeenCalledWith('dep_1', true);
+	});
+
+	it('includes artifact contract and workspace routing in the runner prompt', async () => {
+		const openDueScheduledTasks = vi.fn(async () => 0);
+		const listTasks = vi.fn(async () => ([
+			{
+				id: 'task_review',
+				tenant_id: 'rook',
+				assigned_tenant: 'rainer',
+				priority: 'high',
+				created_at: '2026-03-28T08:00:00.000Z',
+				status: 'open',
+				title: 'Review proposition',
+				description: 'Proof and polish the draft.',
+				depends_on: ['task_executor']
+			}
+		]));
+		const getTask = vi.fn(async (id: string) => id === 'task_executor'
+			? {
+				id: 'task_executor',
+				tenant_id: 'rook',
+				status: 'done',
+				title: 'Draft proposition',
+				priority: 'normal',
+				created_at: '2026-03-28T07:30:00.000Z',
+				completion_note: 'Artifact path: /Users/falco/AI/shared/proposition.md'
+			}
+			: null);
+		const createAgentRuntimeRun = vi.fn(async (payload: any) => ({
+			id: 'runtime_run_workspace',
+			tenant_id: 'rainer',
+			...payload,
+			created_at: '2026-03-28T18:00:01.000Z'
+		}));
+		const getAgentRuntimePolicy = vi.fn(async () => null);
+		const getAgentRuntimeUsage = vi.fn(async () => ({
+			agent_tenant: 'rainer',
+			since: '2026-03-28T00:00:00.000Z',
+			total_runs: 0,
+			duty_runs: 0,
+			impulse_runs: 0
+		}));
+		const getAgentRuntimeSession = vi.fn(async () => null);
+		const storage = {
+			getTenant: () => 'rainer',
+			getAgentRuntimePolicy,
+			getAgentRuntimeUsage,
+			getAgentRuntimeSession,
+			openDueScheduledTasks,
+			listTasks,
+			getTask,
+			createAgentRuntimeRun
+		};
+
+		const result = await handleRuntimeTool('mind_runtime', {
+			action: 'trigger',
+			wake_kind: 'duty',
+			now: '2026-03-28T18:00:00.000Z',
+			metadata: {
+				rainer_workspace: '/Users/falco/AI/rainer-workspace',
+				shared_workspace: '/Users/falco/AI/shared',
+				artifact_workspace: '/Users/falco/AI/shared/out'
+			}
+		}, { storage: storage as any });
+
+		expect(result.runner_contract?.task?.id).toBe('task_review');
+		expect(result.runner_contract?.workspace_routing).toEqual(expect.objectContaining({
+			shared_workspace: '/Users/falco/AI/shared',
+			artifact_workspace: '/Users/falco/AI/shared/out'
+		}));
+		expect(result.runner_contract?.prompt).toContain('Dependencies: task_executor');
+		expect(result.runner_contract?.prompt).toContain('artifact_path');
+		expect(result.runner_contract?.prompt).toContain('/Users/falco/AI/shared/out');
+		expect(result.runner_contract?.prompt).toContain('Shared workspace: /Users/falco/AI/shared');
+	});
+
 });

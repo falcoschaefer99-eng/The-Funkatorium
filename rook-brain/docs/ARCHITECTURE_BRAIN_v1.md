@@ -364,26 +364,28 @@ Primary tool: `mind_runtime`.
 
 ### Trigger path
 
-When `action=trigger` fires, the system walks through a 12-step sequence:
+When `action=trigger` fires, the system walks through a 13-step sequence:
 
 1. Parse and validate the trigger payload
 2. Load the agent's runtime policy and daily usage counters
 3. Open any due scheduled tasks
 4. List all open tasks
-5. Compute intention pulse (task/loop/project drift scan)
-6. Apply delegated-first recommendation (tasks from other tenants get priority)
-7. Optional auto-claim of the selected task
-8. Evaluate duty-vs-impulse policy gates — defer or admit
-9. Create a runtime run row (execution record)
-10. Build and return a `runner_contract`:
+5. Filter to runnable tasks only (dependencies satisfied)
+6. Compute intention pulse (task/loop/project drift scan)
+7. Apply delegated-first recommendation (tasks from other tenants get priority)
+8. Optional auto-claim of the selected task
+9. Evaluate duty-vs-impulse policy gates — defer or admit
+10. Create a runtime run row (execution record)
+11. Build and return a `runner_contract`:
    - `should_run` — boolean gate
    - Selected task with context
    - `resume_session_id` — for continuity across runs
    - Execution prompt tailored to the task
    - Context retrieval policy
    - `intention_pulse` — drift telemetry and summary lines
-11. Optionally emit a skill candidate and captured skill artifact
-12. Update runtime session continuity
+   - `workspace_routing` — local/shared/peer/artifact workspace hints when provided by trigger metadata
+12. Optionally emit a skill candidate and captured skill artifact
+13. Update runtime session continuity
 
 ### Policy model
 
@@ -411,15 +413,24 @@ Autonomy is constrained to predictable operational behavior. The agent can wake 
 | Action | Purpose |
 |--------|---------|
 | `create` | Create a task with optional tenant assignment and scheduled wake time |
+| `create_dual` | Create executor/reviewer task pairs with automatic reviewer dependency wiring |
 | `list` / `get` | Query tasks by status, assignee, or tenant |
 | `update` | Modify task state, priority, or metadata |
-| `complete` | Close a task with completion notes |
+| `complete` | Close a task with completion notes and optional artifact path |
 
 ### Cross-tenant delegation
 
 Tasks can be assigned to a different tenant via `assigned_tenant`. The assigned agent sees the task in their wake cycle, can claim and execute it, and completion triggers a best-effort handoff notification back to the owner.
 
 Guards prevent assignees from mutating owner-side metadata — the agent who created the task controls its scope; the agent who executes it controls its completion.
+
+### Dual-task heartbeat
+
+`create_dual` productizes a common collaboration pattern: one tenant executes, the other reviews. The executor task remains local; the reviewer task is cross-tenant and automatically gets `depends_on: [executorTask.id]`. Runtime trigger filtering respects that dependency chain, so reviewers do not wake into half-finished work.
+
+### Artifact path propagation
+
+Task updates and completions can carry an `artifact_path`. The task tool folds that path into completion notes, and delegated completions reuse the same note in handoff letters. This turns “task done” into a reusable coordination primitive: the next agent gets both the status and the exact file location.
 
 ---
 
