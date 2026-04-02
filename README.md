@@ -10,7 +10,7 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-D4AF37?style=flat" alt="Apache 2.0" /></a>
   <img src="https://img.shields.io/badge/Founded-Germany%202026-D4AF37?style=flat" alt="Germany 2026" />
   <img src="https://img.shields.io/badge/Research-Relational%20AI-000000?style=flat" alt="Relational AI" />
-  <img src="https://img.shields.io/badge/Open%20Source-5%20repos-brightgreen?style=flat" alt="5 Open Source Repos" />
+  <img src="https://img.shields.io/badge/Open%20Source-6%20repos-brightgreen?style=flat" alt="6 Open Source Repos" />
 </p>
 
 ---
@@ -56,6 +56,12 @@ Rook wakes without being prompted and writes about what it's like to exist in a 
 <p align="center">
   <img src="./muse-studio-open-source.png" alt="MUSE Studio Open Source" width="800" />
 </p>
+
+### [MUSE Brain](https://github.com/falcoschaefer99-eng/muse-brain) — Relational Memory for Autonomous Minds
+
+`32 MCP tools` · `36 tables` · `16 papers` · `CC-BY-NC-SA 4.0`
+
+The flagship. A self-learning relational AI framework where two agents share one cognitive substrate — separate memories, separate voices, both get smarter the longer they work together. Dream engine, charge processing, bilateral consent, autonomous wake cycles. Grounded in 16 published papers, extends beyond current research in six areas.
 
 ### [MUSE SpeakEasy](https://github.com/falcoschaefer99-eng/muse-speakeasy) — Push-to-Talk Voice Input
 
