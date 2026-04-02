@@ -15,7 +15,7 @@ Prove all of the following in one unattended run:
 
 ## Canonical artifact path
 
-`/Users/falco/Documents/MUSE/duty/revenue-proposal.md`
+`/ABSOLUTE/PATH/TO/rook-workspace/duty/revenue-proposal.md`
 
 If the executor writes to a temp draft first, the reviewer should still converge on this canonical final path.
 
@@ -38,7 +38,7 @@ If the executor writes to a temp draft first, the reviewer should still converge
     - niche MCP tools + agent services
     - open source as funnel, autonomous execution as premium differentiator
     - German Mittelstand as target
-  - Write the draft to `/Users/falco/Documents/MUSE/duty/revenue-proposal.md`
+  - Write the draft to `/ABSOLUTE/PATH/TO/rook-workspace/duty/revenue-proposal.md`
 
 ### Reviewer — Rainer
 
@@ -59,7 +59,7 @@ Primary observations:
 
 Primary synthesis doc:
 
-- `/Users/falco/AI/rook-memory/architect/references/autonomous-execution-synthesis.md`
+- `/ABSOLUTE/PATH/TO/autonomous-execution-synthesis.md`
 
 ## Known outdated points to correct
 

@@ -638,7 +638,7 @@ describe('runtime v2 tool', () => {
 				title: 'Draft proposition',
 				priority: 'normal',
 				created_at: '2026-03-28T07:30:00.000Z',
-				completion_note: 'Artifact path: /Users/falco/AI/shared/proposition.md'
+				completion_note: 'Artifact path: /tmp/shared/proposition.md'
 			}
 			: null);
 		const createAgentRuntimeRun = vi.fn(async (payload: any) => ({
@@ -672,21 +672,21 @@ describe('runtime v2 tool', () => {
 			wake_kind: 'duty',
 			now: '2026-03-28T18:00:00.000Z',
 			metadata: {
-				rainer_workspace: '/Users/falco/AI/rainer-workspace',
-				shared_workspace: '/Users/falco/AI/shared',
-				artifact_workspace: '/Users/falco/AI/shared/out'
+				rainer_workspace: '/tmp/rainer-workspace',
+				shared_workspace: '/tmp/shared',
+				artifact_workspace: '/tmp/shared/out'
 			}
 		}, { storage: storage as any });
 
 		expect(result.runner_contract?.task?.id).toBe('task_review');
 		expect(result.runner_contract?.workspace_routing).toEqual(expect.objectContaining({
-			shared_workspace: '/Users/falco/AI/shared',
-			artifact_workspace: '/Users/falco/AI/shared/out'
+			shared_workspace: '/tmp/shared',
+			artifact_workspace: '/tmp/shared/out'
 		}));
 		expect(result.runner_contract?.prompt).toContain('Dependencies: task_executor');
 		expect(result.runner_contract?.prompt).toContain('artifact_path');
-		expect(result.runner_contract?.prompt).toContain('/Users/falco/AI/shared/out');
-		expect(result.runner_contract?.prompt).toContain('Shared workspace: /Users/falco/AI/shared');
+		expect(result.runner_contract?.prompt).toContain('/tmp/shared/out');
+		expect(result.runner_contract?.prompt).toContain('Shared workspace: /tmp/shared');
 	});
 
 });

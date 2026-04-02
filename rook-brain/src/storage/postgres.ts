@@ -100,13 +100,39 @@ function toStringList(value: unknown): string[] {
 	return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+function parseJsonValue<T>(value: unknown, fallback: T): T {
+	let raw = value;
+	for (let i = 0; i < 2 && typeof raw === "string"; i++) {
+		const trimmed = raw.trim();
+		if (!trimmed) return fallback;
+		try {
+			raw = JSON.parse(trimmed);
+		} catch {
+			break;
+		}
+	}
+	return (raw ?? fallback) as T;
+}
+
+function parseJsonRecord(value: unknown): Record<string, unknown> {
+	const parsed = parseJsonValue<unknown>(value, {});
+	return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+		? parsed as Record<string, unknown>
+		: {};
+}
+
+function parseJsonArray<T>(value: unknown): T[] {
+	const parsed = parseJsonValue<unknown>(value, []);
+	return Array.isArray(parsed) ? parsed as T[] : [];
+}
+
 function rowToObservation(row: Record<string, unknown>): Observation {
 	return {
 		id: row.id as string,
 		content: row.content as string,
 		territory: row.territory as string,
 		created: toISOString(row.created_at) || new Date().toISOString(),
-		texture: (row.texture ?? {}) as Observation["texture"],
+		texture: parseJsonRecord(row.texture) as unknown as Observation["texture"],
 		context: row.context as string | undefined,
 		mood: row.mood as string | undefined,
 		last_accessed: toISOString(row.last_accessed_at),
@@ -321,7 +347,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 				LIMIT 1
 			`;
 
-			const stored: Partial<BrainState> = rows.length ? (rows[0].data as Partial<BrainState>) : {};
+			const stored: Partial<BrainState> = rows.length ? (parseJsonRecord(rows[0].data) as Partial<BrainState>) : {};
 
 			const state: BrainState = {
 				current_mood: stored.current_mood ?? defaultState.current_mood,
@@ -352,7 +378,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 		try {
 			await this.sql`
 				INSERT INTO brain_state (tenant_id, data, updated_at)
-				VALUES (${this.tenant}, ${JSON.stringify(state)}, NOW())
+				VALUES (${this.tenant}, ${this.sql.json(state as any)}, NOW())
 				ON CONFLICT (tenant_id)
 				DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at
 			`;
@@ -444,7 +470,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 					${obs.content},
 					${territory},
 					${obs.created},
-					${JSON.stringify(obs.texture ?? {})},
+					${this.sql.json((obs.texture ?? {}) as any)},
 					${obs.context ?? null},
 					${obs.mood ?? null},
 					${obs.last_accessed ?? null},
@@ -491,7 +517,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 				${obs.content},
 				${territory},
 				${obs.created},
-				${JSON.stringify(obs.texture ?? {})},
+				${this.sql.json((obs.texture ?? {}) as any)},
 				${obs.context ?? null},
 				${obs.mood ?? null},
 				${obs.last_accessed ?? null},
@@ -696,7 +722,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 				if (update.touch) {
 					await this.sql`
 						UPDATE observations
-						SET texture = texture || ${JSON.stringify(update.texture)},
+						SET texture = texture || ${this.sql.json((update.texture ?? {}) as any)},
 						    last_accessed_at = NOW(),
 						    access_count = access_count + 1
 						WHERE tenant_id = ${this.tenant}
@@ -705,7 +731,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 				} else {
 					await this.sql`
 						UPDATE observations
-						SET texture = texture || ${JSON.stringify(update.texture)}
+						SET texture = texture || ${this.sql.json((update.texture ?? {}) as any)}
 						WHERE tenant_id = ${this.tenant}
 						  AND id = ${update.id}
 					`;
@@ -742,7 +768,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 		try {
 			await this.sql`
 				UPDATE observations
-				SET texture = ${JSON.stringify(texture)}
+				SET texture = ${this.sql.json((texture ?? {}) as any)}
 				WHERE id = ${id}
 				  AND tenant_id = ${this.tenant}
 			`;
@@ -1174,7 +1200,9 @@ export class PostgresBrainStorage implements IBrainStorage {
 				WHERE tenant_id = ${this.tenant}
 				ORDER BY (data->>'created') ASC
 			`;
-			return rows.map(row => row.data as IdentityCore);
+			return rows
+				.map(row => parseJsonRecord(row.data) as unknown as IdentityCore)
+				.filter(core => typeof core.id === "string");
 		} catch (err) {
 			console.error("readIdentityCores failed:", err instanceof Error ? err.message : "unknown error");
 			return [];
@@ -1188,7 +1216,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 				for (const core of cores) {
 					await sql`
 						INSERT INTO identity_cores (id, tenant_id, data)
-						VALUES (${core.id}, ${this.tenant}, ${JSON.stringify(core)})
+						VALUES (${core.id}, ${this.tenant}, ${this.sql.json(core as any)})
 						ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
 					`;
 				}
@@ -1208,7 +1236,9 @@ export class PostgresBrainStorage implements IBrainStorage {
 				WHERE tenant_id = ${this.tenant}
 				ORDER BY (data->>'created') ASC
 			`;
-			return rows.map(row => row.data as Anchor);
+			return rows
+				.map(row => parseJsonRecord(row.data) as unknown as Anchor)
+				.filter(anchor => typeof anchor.id === "string");
 		} catch (err) {
 			console.error("readAnchors failed:", err instanceof Error ? err.message : "unknown error");
 			return [];
@@ -1222,7 +1252,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 				for (const anchor of anchors) {
 					await sql`
 						INSERT INTO anchors (id, tenant_id, data)
-						VALUES (${anchor.id}, ${this.tenant}, ${JSON.stringify(anchor)})
+						VALUES (${anchor.id}, ${this.tenant}, ${this.sql.json(anchor as any)})
 						ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
 					`;
 				}
@@ -1242,7 +1272,9 @@ export class PostgresBrainStorage implements IBrainStorage {
 				WHERE tenant_id = ${this.tenant}
 				ORDER BY (data->>'created') ASC
 			`;
-			return rows.map(row => row.data as Desire);
+			return rows
+				.map(row => parseJsonRecord(row.data) as unknown as Desire)
+				.filter(desire => typeof desire.id === "string");
 		} catch (err) {
 			console.error("readDesires failed:", err instanceof Error ? err.message : "unknown error");
 			return [];
@@ -1256,7 +1288,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 				for (const desire of desires) {
 					await sql`
 						INSERT INTO desires (id, tenant_id, data)
-						VALUES (${desire.id}, ${this.tenant}, ${JSON.stringify(desire)})
+						VALUES (${desire.id}, ${this.tenant}, ${this.sql.json(desire as any)})
 						ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
 					`;
 				}
@@ -1273,7 +1305,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 		try {
 			await this.sql`
 				INSERT INTO wake_log (id, tenant_id, data, created_at)
-				VALUES (${entry.id}, ${this.tenant}, ${JSON.stringify(entry)}, ${entry.timestamp ?? getTimestamp()})
+				VALUES (${entry.id}, ${this.tenant}, ${this.sql.json(entry as any)}, ${entry.timestamp ?? getTimestamp()})
 			`;
 		} catch (err) {
 			console.error("appendWakeLog failed:", err instanceof Error ? err.message : "unknown error");
@@ -1288,7 +1320,9 @@ export class PostgresBrainStorage implements IBrainStorage {
 				WHERE tenant_id = ${this.tenant}
 				ORDER BY created_at ASC
 			`;
-			return rows.map(row => row.data as WakeLogEntry);
+			return rows
+				.map(row => parseJsonRecord(row.data) as WakeLogEntry)
+				.filter(entry => typeof entry.id === "string");
 		} catch (err) {
 			console.error("readWakeLog failed:", err instanceof Error ? err.message : "unknown error");
 			return [];
@@ -1303,7 +1337,9 @@ export class PostgresBrainStorage implements IBrainStorage {
 				ORDER BY created_at DESC
 				LIMIT 1
 			`;
-			return rows.length ? rows[0].data as WakeLogEntry : null;
+			if (!rows.length) return null;
+			const entry = parseJsonRecord(rows[0].data) as WakeLogEntry;
+			return typeof entry.id === "string" ? entry : null;
 		} catch (err) {
 			console.error("readLatestWakeLog failed:", err instanceof Error ? err.message : "unknown error");
 			return null;
@@ -1319,7 +1355,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 				WHERE tenant_id = ${this.tenant}
 				LIMIT 1
 			`;
-			return rows.length ? rows[0].data : null;
+			return rows.length ? parseJsonValue(rows[0].data, null) : null;
 		} catch (err) {
 			console.error("readConversationContext failed:", err instanceof Error ? err.message : "unknown error");
 			return null;
@@ -1330,7 +1366,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 		try {
 			await this.sql`
 				INSERT INTO conversation_context (tenant_id, data, updated_at)
-				VALUES (${this.tenant}, ${JSON.stringify(context)}, NOW())
+				VALUES (${this.tenant}, ${this.sql.json(context as any)}, NOW())
 				ON CONFLICT (tenant_id)
 				DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at
 			`;
@@ -1349,7 +1385,9 @@ export class PostgresBrainStorage implements IBrainStorage {
 				WHERE tenant_id = ${this.tenant}
 				ORDER BY (data->>'created') ASC
 			`;
-			return rows.map(row => row.data as RelationalState);
+			return rows
+				.map(row => parseJsonRecord(row.data) as unknown as RelationalState)
+				.filter(state => typeof state.id === "string");
 		} catch (err) {
 			console.error("readRelationalState failed:", err instanceof Error ? err.message : "unknown error");
 			return [];
@@ -1363,7 +1401,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 				for (const state of states) {
 					await sql`
 						INSERT INTO relational_states (id, tenant_id, data)
-						VALUES (${state.id}, ${this.tenant}, ${JSON.stringify(state)})
+						VALUES (${state.id}, ${this.tenant}, ${this.sql.json(state as any)})
 						ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
 					`;
 				}
@@ -1383,7 +1421,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 				WHERE tenant_id = ${this.tenant}
 				LIMIT 1
 			`;
-			return rows.length ? (rows[0].data as SubconsciousState) : null;
+			return rows.length ? (parseJsonRecord(rows[0].data) as unknown as SubconsciousState) : null;
 		} catch (err) {
 			console.error("readSubconscious failed:", err instanceof Error ? err.message : "unknown error");
 			return null;
@@ -1394,7 +1432,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 		try {
 			await this.sql`
 				INSERT INTO subconscious (tenant_id, data, updated_at)
-				VALUES (${this.tenant}, ${JSON.stringify(state)}, NOW())
+				VALUES (${this.tenant}, ${this.sql.json(state as any)}, NOW())
 				ON CONFLICT (tenant_id)
 				DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at
 			`;
@@ -1413,7 +1451,9 @@ export class PostgresBrainStorage implements IBrainStorage {
 				WHERE tenant_id = ${this.tenant}
 				ORDER BY (data->>'created') ASC
 			`;
-			return rows.map(row => row.data as TriggerCondition);
+			return rows
+				.map(row => parseJsonRecord(row.data) as unknown as TriggerCondition)
+				.filter(trigger => typeof trigger.id === "string");
 		} catch (err) {
 			console.error("readTriggers failed:", err instanceof Error ? err.message : "unknown error");
 			return [];
@@ -1427,7 +1467,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 				for (const trigger of triggers) {
 					await sql`
 						INSERT INTO triggers (id, tenant_id, data)
-						VALUES (${trigger.id}, ${this.tenant}, ${JSON.stringify(trigger)})
+						VALUES (${trigger.id}, ${this.tenant}, ${this.sql.json(trigger as any)})
 						ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
 					`;
 				}
@@ -1458,9 +1498,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 				LIMIT 1
 			`;
 			if (!rows.length) return defaultConsent;
-			// Defensive: handle double-serialized JSONB (string instead of object)
-			let raw = rows[0].data;
-			if (typeof raw === "string") raw = JSON.parse(raw);
+			const raw = parseJsonRecord(rows[0].data) as any;
 			return {
 				user_consent: Array.isArray(raw.user_consent) ? raw.user_consent : [],
 				ai_boundaries: raw.ai_boundaries ?? defaultConsent.ai_boundaries,
@@ -1477,7 +1515,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 		try {
 			await this.sql`
 				INSERT INTO consent (tenant_id, data, updated_at)
-				VALUES (${this.tenant}, ${JSON.stringify(consent)}, NOW())
+				VALUES (${this.tenant}, ${this.sql.json(consent as any)}, NOW())
 				ON CONFLICT (tenant_id)
 				DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at
 			`;
@@ -1502,7 +1540,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 				  AND version = ${version}
 				LIMIT 1
 			`;
-			return rows.length ? rows[0].data : null;
+			return rows.length ? parseJsonValue(rows[0].data, null) : null;
 		} catch (err) {
 			console.error("readBackfillFlag failed:", err instanceof Error ? err.message : "unknown error");
 			return null;
@@ -1514,7 +1552,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 		try {
 			await this.sql`
 				INSERT INTO backfill_flags (version, tenant_id, data)
-				VALUES (${version}, ${this.tenant}, ${JSON.stringify(data)})
+				VALUES (${version}, ${this.tenant}, ${this.sql.json(data as any)})
 				ON CONFLICT (version, tenant_id)
 				DO UPDATE SET data = EXCLUDED.data
 			`;
@@ -1534,8 +1572,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 				LIMIT 1
 			`;
 			if (!rows.length) return [];
-			const data = rows[0].data;
-			return Array.isArray(data) ? (data as TerritoryOverview[]) : [];
+			return parseJsonArray<TerritoryOverview>(rows[0].data);
 		} catch (err) {
 			console.error("readOverviews failed:", err instanceof Error ? err.message : "unknown error");
 			return [];
@@ -1546,7 +1583,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 		try {
 			await this.sql`
 				INSERT INTO territory_overviews (tenant_id, data, updated_at)
-				VALUES (${this.tenant}, ${JSON.stringify(overviews)}, NOW())
+				VALUES (${this.tenant}, ${this.sql.json(overviews as any)}, NOW())
 				ON CONFLICT (tenant_id)
 				DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at
 			`;
@@ -1565,7 +1602,9 @@ export class PostgresBrainStorage implements IBrainStorage {
 				WHERE tenant_id = ${this.tenant}
 				ORDER BY (data->>'updated') DESC
 			`;
-			return rows.map(row => row.data as IronGripEntry);
+			return rows
+				.map(row => parseJsonRecord(row.data) as unknown as IronGripEntry)
+				.filter(entry => typeof entry.id === "string");
 		} catch (err) {
 			console.error("readIronGripIndex failed:", err instanceof Error ? err.message : "unknown error");
 			return [];
@@ -1579,7 +1618,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 				for (const entry of entries) {
 					await sql`
 						INSERT INTO iron_grip_index (id, tenant_id, data)
-						VALUES (${entry.id}, ${this.tenant}, ${JSON.stringify(entry)})
+						VALUES (${entry.id}, ${this.tenant}, ${this.sql.json(entry as any)})
 						ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
 					`;
 				}
@@ -1594,7 +1633,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 		try {
 			await this.sql`
 				INSERT INTO iron_grip_index (id, tenant_id, data)
-				VALUES (${entry.id}, ${this.tenant}, ${JSON.stringify(entry)})
+				VALUES (${entry.id}, ${this.tenant}, ${this.sql.json(entry as any)})
 				ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
 			`;
 		} catch (err) {
@@ -2532,7 +2571,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 					${proposal.resonance_type ?? null},
 					${proposal.confidence},
 					${proposal.rationale ?? null},
-					${JSON.stringify(proposal.metadata ?? {})},
+					${this.sql.json((proposal.metadata ?? {}) as any)},
 					${proposal.status},
 					${proposal.feedback_note ?? null},
 					NOW()
@@ -2940,7 +2979,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 					${observationId},
 					COALESCE(MAX(version_num), 0) + 1,
 					${content},
-					${JSON.stringify(texture ?? {})},
+					${this.sql.json((texture ?? {}) as any)},
 					${changeReason ?? null},
 					NOW()
 				FROM observation_versions
@@ -3887,7 +3926,7 @@ export class PostgresBrainStorage implements IBrainStorage {
 			observation_id: row.observation_id as string,
 			version_num: row.version_num as number,
 			content: row.content as string,
-			texture: (row.texture ?? {}) as ObservationVersion["texture"],
+			texture: parseJsonRecord(row.texture) as unknown as ObservationVersion["texture"],
 			change_reason: row.change_reason as string | undefined,
 			created_at: toISOString(row.created_at) || new Date().toISOString()
 		};

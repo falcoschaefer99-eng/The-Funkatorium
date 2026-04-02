@@ -3,7 +3,7 @@
   "tenants": {
     "rook": {
       "provider": "claude",
-      "workspace_path": "/Users/falco/AI/rook-sanctum",
+      "workspace_path": "/ABSOLUTE/PATH/TO/rook-workspace",
       "enabled": true,
       "personal_wakes": ["09:00", "15:00", "21:00"],
       "impulse_enabled": true,
@@ -14,7 +14,7 @@
     },
     "rainer": {
       "provider": "codex",
-      "workspace_path": "/Users/falco/AI/rainer-workspace",
+      "workspace_path": "/ABSOLUTE/PATH/TO/rainer-workspace",
       "enabled": true,
       "personal_wakes": ["09:30"],
       "impulse_enabled": true,

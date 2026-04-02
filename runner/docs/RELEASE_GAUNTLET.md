@@ -50,7 +50,7 @@ If this fails with Hyperdrive local binding config, treat as infra-blocked, not 
 ## Manual operational checks (release gate)
 
 1. **Kill switch**
-   - Set target tenant `enabled=false` in `runner/config/tenants.json`.
+   - Set target tenant `enabled=false` in your local tenant config (`runner/config/tenants.json`, or the path referenced by `TENANT_CONFIG_PATH`).
    - Run one orchestrator tick and verify no duty/personal/impulse execution occurs.
 
 2. **Replay/idempotency**

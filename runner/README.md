@@ -49,7 +49,7 @@ Best for servers, CI, containerized deployments.
 This is the new Mac-only autonomous companion loop.
 
 It:
-- loads `runner/config/tenants.json`
+- loads local tenant config from `runner/config/tenants.json` (copy from `runner/config/tenants.example.json`; keep the local file gitignored)
 - evaluates due nightly dream, duty, personal, and impulse wakes
 - drains duty wakes in repeated passes for same-cycle baton handoff
 - executes providers in the tenant workspace
@@ -59,6 +59,8 @@ It:
 Run manually:
 
 ```bash
+cp config/tenants.example.json config/tenants.json
+# edit config/tenants.json with your absolute workspace paths
 npm run build
 ./run-orchestrator.sh
 ```
@@ -149,7 +151,7 @@ npm start
 | `SCHEDULE` | `0 6,12,18 * * *` | Cron schedule for daemon mode |
 | `HARNESS_AGENT_PATH` | `./harness/rainer.md` | Agent markdown with `harness_contract` in frontmatter |
 | `ARTIFACT_DIR` | `./artifacts` | Stage artifact + ledger output directory |
-| `TENANT_CONFIG_PATH` | `./config/tenants.json` | Mac orchestrator tenant config |
+| `TENANT_CONFIG_PATH` | `./config/tenants.json` | Mac orchestrator tenant config (local, gitignored; usually copied from `./config/tenants.example.json`) |
 | `ORCHESTRATOR_STATE_PATH` | `./state/orchestrator-state.json` | Local state for due-slot/impulse bookkeeping |
 | `ORCHESTRATOR_TIMEZONE` | `Europe/Berlin` | Orchestrator timezone fallback |
 | `ORCHESTRATOR_SLOT_GRACE_MINUTES` | `10` | Allowed lateness window for slot-based wakes |
@@ -236,7 +238,7 @@ If you want subscription-first behavior in containers, run `./run.sh` via an ext
 
 Canonical first unattended test:
 
-- Rook drafts: `/Users/falco/Documents/MUSE/duty/revenue-proposal.md`
+- Rook drafts: `/ABSOLUTE/PATH/TO/rook-workspace/duty/revenue-proposal.md`
 - Rainer reviews the same artifact via baton pass
 
 Reference dossier:

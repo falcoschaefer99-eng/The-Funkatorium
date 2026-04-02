@@ -348,19 +348,19 @@ describe('tasks v2 tool', () => {
 			action: 'complete',
 			id: 'task_cross_tenant',
 			completion_note: 'Draft complete.',
-			artifact_path: '/Users/falco/AI/shared/proposition.md'
+			artifact_path: '/tmp/shared/proposition.md'
 		}, { storage: storage as any });
 
 		expect(updateTask).toHaveBeenCalledWith(
 			'task_cross_tenant',
 			expect.objectContaining({
 				status: 'done',
-				completion_note: 'Draft complete.\nArtifact path: /Users/falco/AI/shared/proposition.md'
+				completion_note: 'Draft complete.\nArtifact path: /tmp/shared/proposition.md'
 			}),
 			true
 		);
 		expect(appendLetter).toHaveBeenCalledWith(expect.objectContaining({
-			content: expect.stringContaining('Artifact path: /Users/falco/AI/shared/proposition.md')
+			content: expect.stringContaining('Artifact path: /tmp/shared/proposition.md')
 		}));
 		expect(result.completed).toBe(true);
 	});

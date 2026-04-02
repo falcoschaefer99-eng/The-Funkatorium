@@ -110,7 +110,7 @@ Sprint 7 adds the **task delegation system** to the cloud brain. Tasks are the b
 
 ## How to verify
 ```bash
-cd /Users/falco/AI/rook-cloud-brain/rook-brain
+cd rook-brain
 npx tsc --noEmit  # should show only pre-existing errors
 ```
 

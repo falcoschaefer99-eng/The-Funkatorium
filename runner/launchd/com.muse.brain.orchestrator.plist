@@ -7,11 +7,11 @@
 
     <key>ProgramArguments</key>
     <array>
-      <string>/Users/falco/AI/rook-cloud-brain/runner/run-orchestrator.sh</string>
+      <string>__RUNNER_DIR__/run-orchestrator.sh</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/falco/AI/rook-cloud-brain/runner</string>
+    <string>__RUNNER_DIR__</string>
 
     <key>StartInterval</key>
     <integer>60</integer>
@@ -20,9 +20,9 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/falco/Documents/MUSE/logs/orchestrator.stdout.log</string>
+    <string>__LOG_DIR__/orchestrator.stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/falco/Documents/MUSE/logs/orchestrator.stderr.log</string>
+    <string>__LOG_DIR__/orchestrator.stderr.log</string>
   </dict>
 </plist>
