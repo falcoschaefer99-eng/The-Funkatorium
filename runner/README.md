@@ -44,6 +44,31 @@ npm run daemon  # node-cron loop
 
 Best for servers, CI, containerized deployments.
 
+## 3) Mac orchestrator (`node dist/index.js --orchestrator`)
+
+This is the new Mac-only autonomous companion loop.
+
+It:
+- loads `runner/config/tenants.json`
+- evaluates due nightly dream, duty, personal, and impulse wakes
+- drains duty wakes in repeated passes for same-cycle baton handoff
+- executes providers in the tenant workspace
+- writes audit lines and local artifacts
+- can notify via Telegram directly
+
+Run manually:
+
+```bash
+npm run build
+./run-orchestrator.sh
+```
+
+Launchd assets:
+
+- `runner/launchd/com.muse.brain.orchestrator.plist`
+- `runner/launchd/install-orchestrator.sh`
+- `runner/launchd/uninstall-orchestrator.sh`
+
 ---
 
 ## Setup
@@ -101,6 +126,10 @@ npm start
 | `AUDIT_PATH` | `./audit.jsonl` | JSONL audit log path |
 | `SYSTEM_PROMPT_PATH` | `./system-prompt.txt` | Custom system prompt file |
 | `TENANT_ID` | `rook` | Brain tenant id |
+| `WORKSPACE_PATH` | `./` | Working directory for provider execution |
+| `RUNNER_PROMPT_FILE` | _(empty)_ | Prompt file override for orchestrator/provider-executor mode |
+| `RUNNER_RESULT_PATH` | _(empty)_ | JSON result payload path for orchestrator/provider-executor mode |
+| `ALLOW_ARTIFACT_WRITES` | `false` | Enables writable Codex sandbox for artifact-producing wakes |
 
 ### API mode controls (`node dist/index.js`)
 
@@ -120,6 +149,13 @@ npm start
 | `SCHEDULE` | `0 6,12,18 * * *` | Cron schedule for daemon mode |
 | `HARNESS_AGENT_PATH` | `./harness/rainer.md` | Agent markdown with `harness_contract` in frontmatter |
 | `ARTIFACT_DIR` | `./artifacts` | Stage artifact + ledger output directory |
+| `TENANT_CONFIG_PATH` | `./config/tenants.json` | Mac orchestrator tenant config |
+| `ORCHESTRATOR_STATE_PATH` | `./state/orchestrator-state.json` | Local state for due-slot/impulse bookkeeping |
+| `ORCHESTRATOR_TIMEZONE` | `Europe/Berlin` | Orchestrator timezone fallback |
+| `ORCHESTRATOR_SLOT_GRACE_MINUTES` | `10` | Allowed lateness window for slot-based wakes |
+| `ORCHESTRATOR_MAX_DUTY_PASSES` | `8` | Max same-cycle baton/drain passes |
+| `TELEGRAM_BOT_TOKEN` | _(optional)_ | Telegram bot token for direct local notifications |
+| `TELEGRAM_CHAT_ID` | _(optional)_ | Telegram chat id for direct local notifications |
 
 ---
 
@@ -195,3 +231,14 @@ docker run --env-file .env -v $(pwd)/logs:/app/logs muse-brain-runner
 ```
 
 If you want subscription-first behavior in containers, run `./run.sh` via an external scheduler on a host where CLI auth is already established.
+
+## First AFK proof
+
+Canonical first unattended test:
+
+- Rook drafts: `/Users/falco/Documents/MUSE/duty/revenue-proposal.md`
+- Rainer reviews the same artifact via baton pass
+
+Reference dossier:
+
+- `runner/docs/AFK_TEST_REVENUE_PROPOSAL.md`

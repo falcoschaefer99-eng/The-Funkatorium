@@ -365,6 +365,54 @@ describe('tasks v2 tool', () => {
 		expect(result.completed).toBe(true);
 	});
 
+	it('returns unblocked downstream delegated tasks when a dependency completes', async () => {
+		const completedTask = makeTask({
+			id: 'task_executor',
+			tenant_id: 'rook',
+			title: 'Draft the proposition'
+		});
+		const downstreamTask = makeTask({
+			id: 'task_review',
+			tenant_id: 'rook',
+			assigned_tenant: 'rainer',
+			title: 'Review: Draft the proposition',
+			status: 'open',
+			depends_on: ['task_executor']
+		});
+		const storage = {
+			getTenant: () => 'rook',
+			getTask: vi.fn(async (id: string) => {
+				if (id === 'task_executor') return completedTask;
+				if (id === 'task_review') return downstreamTask;
+				return null;
+			}),
+			updateTask: vi.fn(async (id: string, updates: Partial<Task>) => makeTask({
+				id,
+				tenant_id: 'rook',
+				title: 'Draft the proposition',
+				status: (updates.status as Task['status']) ?? 'done',
+				completion_note: updates.completion_note,
+				completed_at: updates.completed_at
+			})),
+			listTasks: vi.fn(async () => [downstreamTask])
+		};
+
+		const result = await handleTaskTool('mind_task', {
+			action: 'complete',
+			id: 'task_executor',
+			completion_note: 'Draft complete.'
+		}, { storage: storage as any });
+
+		expect(result.completed).toBe(true);
+		expect(result.unblocked_tasks).toEqual([
+			expect.objectContaining({
+				id: 'task_review',
+				assigned_tenant: 'rainer'
+			})
+		]);
+		expect(result.unblocked_assigned_tenants).toEqual(['rainer']);
+	});
+
 });
 
 describe('comms v2 context tasks', () => {

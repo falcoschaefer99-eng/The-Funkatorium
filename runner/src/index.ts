@@ -1,5 +1,6 @@
 import { loadConfig } from "./config.js";
 import { startDaemon, executeRun } from "./schedule.js";
+import { loadOrchestratorConfig, runOrchestratorTick } from "./orchestrator.js";
 
 // Load .env manually if not in a process that already loaded it
 // (node-cron daemon mode, system cron both need this)
@@ -24,6 +25,18 @@ try {
 }
 
 const isDaemon = process.argv.includes("--daemon");
+const isOrchestrator = process.argv.includes("--orchestrator");
+
+if (isOrchestrator) {
+  try {
+    const orchestratorConfig = loadOrchestratorConfig();
+    await runOrchestratorTick(orchestratorConfig);
+    process.exit(0);
+  } catch (err: unknown) {
+    console.error("[orchestrator] Fatal:", err instanceof Error ? err.message : err);
+    process.exit(1);
+  }
+}
 
 let config;
 try {

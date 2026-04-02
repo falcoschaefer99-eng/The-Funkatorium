@@ -372,11 +372,11 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 						: [];
 
 					const runnableOpenTasks = await filterRunnableTasks(storage, openTasks);
-					const delegatedOpenTasks = runnableOpenTasks.filter(task =>
-						task.assigned_tenant === agentTenant && task.tenant_id !== agentTenant
-					);
+					const actionableOpenTasks = runnableOpenTasks.filter(task => isTaskActionableForAgent(task, agentTenant));
+					const delegatedOpenTasks = actionableOpenTasks.filter(task => isDelegatedTaskForAgent(task, agentTenant));
+					const delegatedAwayOpenTaskCount = runnableOpenTasks.filter(task => isDelegatedAwayFromAgent(task, agentTenant)).length;
 					const blockedOpenTaskCount = openTasks.length - runnableOpenTasks.length;
-					const recommendedTask = pickRecommendedTask(runnableOpenTasks, agentTenant);
+					const recommendedTask = pickRecommendedTask(actionableOpenTasks, agentTenant);
 					const workspaceRouting = extractWorkspaceRouting(metadataResult.value, agentTenant);
 
 					let highPriorityPending = 0;
@@ -438,7 +438,9 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 							open_task_count: openTasks.length,
 							runnable_open_task_count: runnableOpenTasks.length,
 							blocked_open_task_count: blockedOpenTaskCount,
+							actionable_open_task_count: actionableOpenTasks.length,
 							delegated_open_count: delegatedOpenTasks.length,
+							delegated_away_open_count: delegatedAwayOpenTaskCount,
 							priority_pending: highPriorityPending,
 							policy_mode: policy.execution_mode,
 							policy_daily_wake_budget: policy.daily_wake_budget,
@@ -529,7 +531,9 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 						open_task_count: openTasks.length,
 						runnable_open_task_count: runnableOpenTasks.length,
 						blocked_open_task_count: blockedOpenTaskCount,
+						actionable_open_task_count: actionableOpenTasks.length,
 						delegated_open_task_count: delegatedOpenTasks.length,
+						delegated_away_open_task_count: delegatedAwayOpenTaskCount,
 						high_priority_pending: highPriorityPending,
 						policy,
 						usage,
@@ -735,13 +739,27 @@ async function claimTaskForAgent(
 	agentTenant: string
 ): Promise<Task> {
 	if (task.status !== "open") return task;
-	if (task.tenant_id !== agentTenant && !isDelegatedTaskForAgent(task, agentTenant)) return task;
+	if (!isTaskActionableForAgent(task, agentTenant)) return task;
 	const includeAssigned = isDelegatedTaskForAgent(task, agentTenant);
 	return storage.updateTask(task.id, { status: "in_progress" }, includeAssigned);
 }
 
 function isDelegatedTaskForAgent(task: Task, agentTenant: string): boolean {
 	return task.assigned_tenant === agentTenant && task.tenant_id !== agentTenant;
+}
+
+function isDelegatedAwayFromAgent(task: Task, agentTenant: string): boolean {
+	return task.tenant_id === agentTenant
+		&& typeof task.assigned_tenant === "string"
+		&& task.assigned_tenant.trim().length > 0
+		&& task.assigned_tenant !== agentTenant;
+}
+
+function isTaskActionableForAgent(task: Task, agentTenant: string): boolean {
+	if (isDelegatedTaskForAgent(task, agentTenant)) return true;
+	if (task.tenant_id !== agentTenant) return false;
+	if (isDelegatedAwayFromAgent(task, agentTenant)) return false;
+	return true;
 }
 
 function firstCleanText(...values: unknown[]): string | undefined {
@@ -791,8 +809,9 @@ function extractWorkspaceRouting(metadata: Record<string, unknown>, agentTenant:
 }
 
 function pickRecommendedTask(tasks: Task[], agentTenant: string): Task | undefined {
-	const delegated = tasks.filter(task => isDelegatedTaskForAgent(task, agentTenant));
-	const pool = delegated.length > 0 ? delegated : tasks;
+	const actionable = tasks.filter(task => isTaskActionableForAgent(task, agentTenant));
+	const delegated = actionable.filter(task => isDelegatedTaskForAgent(task, agentTenant));
+	const pool = delegated.length > 0 ? delegated : actionable;
 	const scored = pool
 		.map(task => {
 			const priority = task.priority === "burning" ? 5
@@ -843,6 +862,7 @@ function buildAutonomousTaskPrompt(
 			: `Ownership: local task for ${agentTenant}.`,
 		"",
 		"Execution protocol:",
+		"0) Start with mind_wake action using depth=full so identity/state/task context is loaded before execution.",
 		"1) Do only what is needed to complete this task.",
 		"2) Keep tool usage lean; avoid side quests.",
 		"3) Respect task dependencies; if anything this task depends on is incomplete, stop and resolve the block first.",

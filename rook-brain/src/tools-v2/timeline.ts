@@ -149,8 +149,11 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 			}
 
 			// Chronological path (no query, or embedding failed).
-			// Re-apply limit after entity filter.
-			filtered = filtered.slice(0, limit);
+			// Enforce chronological ordering even if storage order drifts.
+			filtered = filtered
+				.slice()
+				.sort((a, b) => new Date(a.observation.created).getTime() - new Date(b.observation.created).getTime())
+				.slice(0, limit);
 
 			const observations = await Promise.all(filtered.map(async r => {
 				const base: Record<string, unknown> = {

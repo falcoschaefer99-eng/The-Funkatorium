@@ -12,6 +12,93 @@ function trimLog(consent: ConsentState): void {
 	if (consent.log.length > 100) consent.log = consent.log.slice(-100);
 }
 
+type PresenceEvent = {
+	entity?: string;
+	state: string;
+	observed_at: string;
+	observed_ms: number;
+};
+
+function normalizeEntity(entity: unknown): string | undefined {
+	if (typeof entity !== "string") return undefined;
+	const trimmed = entity.trim().slice(0, 100);
+	return trimmed || undefined;
+}
+
+function entitiesMatch(triggerEntity: string | undefined, eventEntity: string | undefined): boolean {
+	if (!triggerEntity) return true;
+	if (!eventEntity) return false;
+	return triggerEntity.toLowerCase() === eventEntity.toLowerCase();
+}
+
+function parseMaybeTimestamp(value: unknown): number | undefined {
+	if (typeof value !== "string") return undefined;
+	const ms = new Date(value).getTime();
+	return Number.isNaN(ms) ? undefined : ms;
+}
+
+function isValidTimezone(timezone: string): boolean {
+	try {
+		new Intl.DateTimeFormat("en-US", { timeZone: timezone }).format(new Date());
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function getHourInTimezone(nowMs: number, timezone: string): { hour: number; timezone: string; usedFallback: boolean } {
+	const nowDate = new Date(nowMs);
+	try {
+		const formatter = new Intl.DateTimeFormat("en-US", {
+			timeZone: timezone,
+			hour: "2-digit",
+			hourCycle: "h23"
+		});
+		const hourPart = formatter.formatToParts(nowDate).find(part => part.type === "hour")?.value;
+		const parsedHour = Number(hourPart);
+		if (!Number.isNaN(parsedHour)) {
+			return { hour: parsedHour, timezone, usedFallback: false };
+		}
+	} catch {
+		// Fall through to UTC fallback.
+	}
+
+	return { hour: nowDate.getUTCHours(), timezone: "UTC", usedFallback: timezone !== "UTC" };
+}
+
+function parsePresenceEvents(args: any, nowMs: number, nowIso: string): PresenceEvent[] {
+	const rawEvents: unknown[] = [];
+	if (args?.event && typeof args.event === "object") rawEvents.push(args.event);
+	if (Array.isArray(args?.events)) rawEvents.push(...args.events);
+
+	const events: PresenceEvent[] = [];
+	for (const raw of rawEvents) {
+		if (!raw || typeof raw !== "object") continue;
+		const event = raw as Record<string, unknown>;
+		const stateRaw = typeof event.state === "string" ? event.state.trim() : "";
+		if (!stateRaw) continue;
+
+		const entity = normalizeEntity(event.entity);
+		const state = stateRaw.slice(0, 50);
+		const observedMs = parseMaybeTimestamp(event.observed_at) ?? nowMs;
+		const observedAt = new Date(observedMs).toISOString();
+		events.push({ entity, state, observed_at: observedAt, observed_ms: observedMs });
+	}
+
+	events.sort((a, b) => a.observed_ms - b.observed_ms);
+	if (events.length === 0 && typeof args?.state === "string" && args.state.trim()) {
+		const fallbackState = args.state.trim().slice(0, 50);
+		events.push({
+			entity: normalizeEntity(args.entity),
+			state: fallbackState,
+			observed_at: nowIso,
+			observed_ms: nowMs
+		});
+	}
+
+	return events;
+}
+
 export const TOOL_DEFS = [
 	{
 		name: "mind_consent",
@@ -62,10 +149,19 @@ export const TOOL_DEFS = [
 					enum: ["no_contact", "presence_transition", "time_window"],
 					description: "[set] Trigger type: no_contact notices silence, presence_transition adjusts on return, time_window restricts to hours."
 				},
-				entity: { type: "string", description: "[set/list] Who this trigger is about (e.g., 'partner')" },
+				entity: { type: "string", description: "[set/list/check] Who this trigger is about (e.g., 'partner')" },
 				config: {
 					type: "object",
-					description: "[set] Trigger-specific config. no_contact: {silence_hours}. presence_transition: {from, to}. time_window: {start_hour, end_hour, timezone}."
+					description: "[set] Trigger-specific config. no_contact: {silence_hours}. presence_transition: {from, to, cooldown_minutes?}. time_window: {start_hour, end_hour, timezone?}."
+				},
+				event: {
+					type: "object",
+					description: "[check] Optional single presence event: {entity, state, observed_at?}. Drives no_contact and presence_transition updates."
+				},
+				events: {
+					type: "array",
+					items: { type: "object" },
+					description: "[check] Optional presence event batch. Processed in observed_at order."
 				},
 				// list params
 				active_only: { type: "boolean", default: true, description: "[list] Only show active triggers" }
@@ -295,39 +391,63 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 							throw new Error("no_contact requires config.silence_hours (number, min 1)");
 						}
 						break;
-					case "presence_transition":
-						if (!config.from || !config.to) {
+					case "presence_transition": {
+						const from = typeof config.from === "string" ? config.from.trim() : "";
+						const to = typeof config.to === "string" ? config.to.trim() : "";
+						if (!from || !to) {
 							throw new Error("presence_transition requires config.from and config.to");
 						}
 						break;
-					case "time_window":
+					}
+					case "time_window": {
 						if (config.start_hour === undefined || config.end_hour === undefined) {
 							throw new Error("time_window requires config.start_hour and config.end_hour");
 						}
+						if (config.timezone !== undefined) {
+							const timezone = String(config.timezone).trim();
+							if (timezone && !isValidTimezone(timezone)) {
+								throw new Error(`Invalid timezone: ${timezone}`);
+							}
+						}
 						break;
+					}
 				}
 
 				let sanitizedConfig: Record<string, unknown> = {};
 				switch (args.type) {
-					case "no_contact":
+					case "no_contact": {
 						sanitizedConfig = { silence_hours: Math.min(Math.max(Number(config.silence_hours) || 24, 1), 8760) };
+						const seededSignal = parseMaybeTimestamp(config.last_signal_at ?? config.last_contact_at);
+						if (seededSignal !== undefined) {
+							sanitizedConfig.last_signal_at = new Date(seededSignal).toISOString();
+							sanitizedConfig.last_contact_at = sanitizedConfig.last_signal_at;
+						}
 						break;
-					case "presence_transition":
-						sanitizedConfig = { from: String(config.from).slice(0, 50), to: String(config.to).slice(0, 50) };
+					}
+					case "presence_transition": {
+						const cooldownMinutes = Math.min(Math.max(Math.floor(Number(config.cooldown_minutes) || 0), 0), 1440);
+						sanitizedConfig = {
+							from: String(config.from).trim().slice(0, 50),
+							to: String(config.to).trim().slice(0, 50),
+							cooldown_minutes: cooldownMinutes
+						};
 						break;
-					case "time_window":
+					}
+					case "time_window": {
+						const timezoneRaw = typeof config.timezone === "string" ? config.timezone.trim() : "";
 						sanitizedConfig = {
 							start_hour: Math.min(Math.max(Math.floor(Number(config.start_hour) || 0), 0), 23),
 							end_hour: Math.min(Math.max(Math.floor(Number(config.end_hour) || 23), 0), 23),
-							timezone: config.timezone ? String(config.timezone).slice(0, 30) : undefined
+							timezone: timezoneRaw ? timezoneRaw.slice(0, 100) : undefined
 						};
 						break;
+					}
 				}
 
 				const trigger: TriggerCondition = {
 					id: generateId("trigger"),
 					type: args.type,
-					entity: args.entity?.trim(),
+					entity: normalizeEntity(args.entity),
 					config: sanitizedConfig,
 					created: now,
 					last_checked: now,
@@ -347,6 +467,7 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 				const nowMs = Date.now();
 				const fired: any[] = [];
 				const approaching: any[] = [];
+				const presenceEvents = parsePresenceEvents(args, nowMs, now);
 				let changed = false;
 
 				for (const trigger of triggers) {
@@ -355,38 +476,131 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 					trigger.last_checked = now;
 					changed = true;
 
+					const matchingEvents = presenceEvents.filter(event => entitiesMatch(trigger.entity, event.entity));
+
 					switch (trigger.type) {
 						case "no_contact": {
-							const silenceHours = (trigger.config.silence_hours as number) || 24;
-							const lastFired = trigger.last_fired ? new Date(trigger.last_fired).getTime() : 0;
-							const hoursSinceCheck = (nowMs - lastFired) / (1000 * 60 * 60);
+							const silenceHours = Math.min(Math.max(Number(trigger.config.silence_hours) || 24, 1), 8760);
+							let lastSignalAt = typeof trigger.config.last_signal_at === "string"
+								? trigger.config.last_signal_at
+								: (typeof trigger.config.last_contact_at === "string" ? trigger.config.last_contact_at : undefined);
+							let lastSignalMs = parseMaybeTimestamp(lastSignalAt);
 
-							if (hoursSinceCheck >= silenceHours) {
+							for (const event of matchingEvents) {
+								if (lastSignalMs !== undefined && event.observed_ms <= lastSignalMs) continue;
+								lastSignalAt = event.observed_at;
+								lastSignalMs = event.observed_ms;
+							}
+
+							if (lastSignalAt && trigger.config.last_signal_at !== lastSignalAt) {
+								trigger.config.last_signal_at = lastSignalAt;
+								trigger.config.last_contact_at = lastSignalAt;
+								changed = true;
+							}
+
+							if (lastSignalMs === undefined) {
+								break;
+							}
+
+							const hoursSinceSignal = (nowMs - lastSignalMs) / (1000 * 60 * 60);
+							if (hoursSinceSignal < 0) break;
+
+							const lastFiredMs = parseMaybeTimestamp(trigger.last_fired) ?? 0;
+							const alreadyFiredForCurrentSilence = lastFiredMs >= lastSignalMs;
+
+							if (hoursSinceSignal >= silenceHours && !alreadyFiredForCurrentSilence) {
 								trigger.last_fired = now;
-								fired.push({ id: trigger.id, type: trigger.type, entity: trigger.entity, message: `${trigger.entity || "Someone"} hasn't been around for ${Math.floor(hoursSinceCheck)}h (threshold: ${silenceHours}h)` });
-							} else if (hoursSinceCheck >= silenceHours * 0.75) {
-								approaching.push({ id: trigger.id, type: trigger.type, entity: trigger.entity, hours_remaining: Math.round(silenceHours - hoursSinceCheck) });
+								changed = true;
+								fired.push({
+									id: trigger.id,
+									type: trigger.type,
+									entity: trigger.entity,
+									message: `${trigger.entity || "Someone"} hasn't been around for ${Math.floor(hoursSinceSignal)}h (threshold: ${silenceHours}h)`
+								});
+							} else if (hoursSinceSignal >= silenceHours * 0.75 && hoursSinceSignal < silenceHours && !alreadyFiredForCurrentSilence) {
+								approaching.push({
+									id: trigger.id,
+									type: trigger.type,
+									entity: trigger.entity,
+									hours_remaining: Math.max(0, Math.round(silenceHours - hoursSinceSignal))
+								});
 							}
 							break;
 						}
 						case "time_window": {
-							const startHour = (trigger.config.start_hour as number) ?? 0;
-							const endHour = (trigger.config.end_hour as number) ?? 24;
-							const currentHour = new Date().getUTCHours();
-							const cetHour = (currentHour + 1) % 24;
+							const startHour = Math.min(Math.max(Math.floor(Number(trigger.config.start_hour) || 0), 0), 23);
+							const endHour = Math.min(Math.max(Math.floor(Number(trigger.config.end_hour) || 0), 0), 23);
+							const configuredTimezone = typeof trigger.config.timezone === "string" && trigger.config.timezone.trim()
+								? trigger.config.timezone.trim()
+								: "UTC";
+							const hourInfo = getHourInTimezone(nowMs, configuredTimezone);
 
 							const inWindow = startHour <= endHour
-								? cetHour >= startHour && cetHour < endHour
-								: cetHour >= startHour || cetHour < endHour;
+								? hourInfo.hour >= startHour && hourInfo.hour < endHour
+								: hourInfo.hour >= startHour || hourInfo.hour < endHour;
 
 							if (inWindow) {
-								fired.push({ id: trigger.id, type: trigger.type, entity: trigger.entity, message: `Time window active (${startHour}:00-${endHour}:00 CET, current: ${cetHour}:00)` });
+								const fallbackSuffix = hourInfo.usedFallback ? "; requested timezone invalid, using UTC" : "";
+								fired.push({
+									id: trigger.id,
+									type: trigger.type,
+									entity: trigger.entity,
+									message: `Time window active (${startHour}:00-${endHour}:00 ${hourInfo.timezone}, current: ${hourInfo.hour}:00${fallbackSuffix})`
+								});
 							}
 							break;
 						}
-						case "presence_transition":
-							// Event-driven — daemon can't detect directly
+						case "presence_transition": {
+							const fromState = typeof trigger.config.from === "string" ? trigger.config.from : "";
+							const toState = typeof trigger.config.to === "string" ? trigger.config.to : "";
+							if (!fromState || !toState) break;
+
+							const cooldownMinutes = Math.min(Math.max(Math.floor(Number(trigger.config.cooldown_minutes) || 0), 0), 1440);
+							const cooldownMs = cooldownMinutes * 60 * 1000;
+
+							let lastSeenState = typeof trigger.config.last_seen_state === "string" ? trigger.config.last_seen_state : undefined;
+							let lastSeenAtMs = parseMaybeTimestamp(trigger.config.last_seen_at);
+
+							for (const event of matchingEvents) {
+								if (lastSeenAtMs !== undefined && event.observed_ms <= lastSeenAtMs) continue;
+
+								const previousState = lastSeenState;
+								if (previousState && previousState !== event.state) {
+									const lastFiredMs = parseMaybeTimestamp(trigger.last_fired) ?? 0;
+									const withinCooldown = cooldownMs > 0 && lastFiredMs > 0 && (event.observed_ms - lastFiredMs) < cooldownMs;
+
+									if (previousState === fromState && event.state === toState && !withinCooldown) {
+										trigger.last_fired = event.observed_at;
+										changed = true;
+										fired.push({
+											id: trigger.id,
+											type: trigger.type,
+											entity: trigger.entity,
+											from: previousState,
+											to: event.state,
+											observed_at: event.observed_at,
+											message: `${trigger.entity || "Entity"} transitioned ${previousState} → ${event.state}`
+										});
+									}
+
+									trigger.config.last_transition_at = event.observed_at;
+									changed = true;
+								}
+
+								if (trigger.config.last_seen_state !== event.state) {
+									trigger.config.last_seen_state = event.state;
+									changed = true;
+								}
+								if (trigger.config.last_seen_at !== event.observed_at) {
+									trigger.config.last_seen_at = event.observed_at;
+									changed = true;
+								}
+
+								lastSeenState = event.state;
+								lastSeenAtMs = event.observed_ms;
+							}
 							break;
+						}
 					}
 				}
 
@@ -394,6 +608,7 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 
 				return {
 					checked: triggers.filter(t => t.active).length,
+					events_processed: presenceEvents.length > 0 ? presenceEvents.length : undefined,
 					fired: fired.length > 0 ? fired : undefined,
 					approaching: approaching.length > 0 ? approaching : undefined,
 					note: fired.length > 0 ? "These triggers fired — something needs attention." : "No triggers fired."

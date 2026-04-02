@@ -98,4 +98,15 @@ export class BrainClient {
       .map((block) => block.text)
       .join("\n");
   }
+
+  async callToolJson<T>(name: string, args: Record<string, unknown>): Promise<T> {
+    const raw = await this.callTool(name, args);
+
+    try {
+      return JSON.parse(raw) as T;
+    } catch (err: unknown) {
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new Error(`Tool ${name} returned non-JSON content: ${reason}`);
+    }
+  }
 }

@@ -260,6 +260,7 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 						completion_note: completionNote,
 						completed_at: getTimestamp()
 					}, isAssignedTask);
+					const unblocked = await findUnblockedDependentTasks(storage, args.id);
 
 					// If we're the assignee completing a cross-tenant task, notify the assigner
 					if (isAssignedTask) {
@@ -276,18 +277,31 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 						};
 						try {
 							await recipientStorage.appendLetter(letter);
-							return { completed: true, task: updated, notified: existing.tenant_id };
+							return {
+								completed: true,
+								task: updated,
+								notified: existing.tenant_id,
+								unblocked_tasks: unblocked.tasks,
+								unblocked_assigned_tenants: unblocked.assigned_tenants
+							};
 						} catch (err) {
 							return {
 								completed: true,
 								task: updated,
 								notification_target: existing.tenant_id,
-								notification_error: err instanceof Error ? err.message : "Failed to send completion notification"
+								notification_error: err instanceof Error ? err.message : "Failed to send completion notification",
+								unblocked_tasks: unblocked.tasks,
+								unblocked_assigned_tenants: unblocked.assigned_tenants
 							};
 						}
 					}
 
-					return { completed: true, task: updated };
+					return {
+						completed: true,
+						task: updated,
+						unblocked_tasks: unblocked.tasks,
+						unblocked_assigned_tenants: unblocked.assigned_tenants
+					};
 				}
 
 				default:
@@ -302,6 +316,49 @@ export async function handleTool(name: string, args: any, context: ToolContext):
 
 function isAssignedTaskForCurrentTenant(task: Task, tenant: string): boolean {
 	return task.assigned_tenant === tenant && task.tenant_id !== tenant;
+}
+
+async function findUnblockedDependentTasks(
+	storage: ToolContext["storage"],
+	completedTaskId: string
+): Promise<{ tasks: Task[]; assigned_tenants: string[] }> {
+	if (typeof storage.listTasks !== "function") {
+		return { tasks: [], assigned_tenants: [] };
+	}
+
+	const visibleOpenTasks = await storage.listTasks("open", undefined, 200, true);
+	const dependents = visibleOpenTasks.filter(task => task.depends_on?.includes(completedTaskId));
+	if (dependents.length === 0) {
+		return { tasks: [], assigned_tenants: [] };
+	}
+
+	const tasks: Task[] = [];
+	for (const task of dependents) {
+		if (!task.depends_on || task.depends_on.length === 0) {
+			tasks.push(task);
+			continue;
+		}
+
+		let allDone = true;
+		for (const dependencyId of task.depends_on) {
+			if (dependencyId === completedTaskId) continue;
+			const dependency = await storage.getTask(dependencyId, true);
+			if (!dependency || dependency.status !== "done") {
+				allDone = false;
+				break;
+			}
+		}
+
+		if (allDone) tasks.push(task);
+	}
+
+	const assignedTenants = Array.from(new Set(
+		tasks
+			.map(task => task.assigned_tenant)
+			.filter((tenant): tenant is string => typeof tenant === "string" && tenant.trim().length > 0)
+	));
+
+	return { tasks, assigned_tenants: assignedTenants };
 }
 
 function validateTextLength(field: string, value: unknown, maxLength: number): string | undefined {

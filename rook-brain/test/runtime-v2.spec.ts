@@ -384,6 +384,76 @@ describe('runtime v2 tool', () => {
 		}));
 	});
 
+	it('does not reclaim owner tasks delegated to another tenant', async () => {
+		const openDueScheduledTasks = vi.fn(async () => 0);
+		const listTasks = vi.fn(async () => ([
+			{
+				id: 'task_delegated_away',
+				tenant_id: 'rook',
+				assigned_tenant: 'rainer',
+				priority: 'burning',
+				created_at: '2026-03-28T08:00:00.000Z',
+				status: 'open',
+				title: 'Delegated review'
+			},
+			{
+				id: 'task_local',
+				tenant_id: 'rook',
+				priority: 'normal',
+				created_at: '2026-03-28T09:00:00.000Z',
+				status: 'open',
+				title: 'Local execution'
+			}
+		]));
+		const updateTask = vi.fn(async (id: string, updates: any) => ({
+			id,
+			tenant_id: 'rook',
+			priority: 'normal',
+			created_at: '2026-03-28T09:00:00.000Z',
+			status: updates.status ?? 'open',
+			title: 'Local execution'
+		}));
+		const createAgentRuntimeRun = vi.fn(async (payload: any) => ({
+			id: 'runtime_run_owner_guard',
+			tenant_id: 'rook',
+			...payload,
+			created_at: '2026-03-28T15:00:01.000Z'
+		}));
+		const getAgentRuntimePolicy = vi.fn(async () => null);
+		const getAgentRuntimeUsage = vi.fn(async () => ({
+			agent_tenant: 'rook',
+			since: '2026-03-28T00:00:00.000Z',
+			total_runs: 0,
+			duty_runs: 0,
+			impulse_runs: 0
+		}));
+		const getAgentRuntimeSession = vi.fn(async () => null);
+		const storage = {
+			getTenant: () => 'rook',
+			getAgentRuntimePolicy,
+			getAgentRuntimeUsage,
+			getAgentRuntimeSession,
+			openDueScheduledTasks,
+			listTasks,
+			updateTask,
+			createAgentRuntimeRun
+		};
+
+		const result = await handleRuntimeTool('mind_runtime', {
+			action: 'trigger',
+			wake_kind: 'duty',
+			auto_claim_task: true,
+			now: '2026-03-28T15:00:00.000Z'
+		}, { storage: storage as any });
+
+		expect(result.triggered).toBe(true);
+		expect(result.claimed_task?.id).toBe('task_local');
+		expect(result.runner_contract?.task?.id).toBe('task_local');
+		expect(result.delegated_away_open_task_count).toBe(1);
+		expect(updateTask).toHaveBeenCalledWith('task_local', { status: 'in_progress' }, false);
+		expect(updateTask).not.toHaveBeenCalledWith('task_delegated_away', { status: 'in_progress' }, expect.anything());
+	});
+
 	it('reuses stored runtime session id in trigger when session_id is omitted', async () => {
 		const openDueScheduledTasks = vi.fn(async () => 0);
 		const listTasks = vi.fn(async () => [

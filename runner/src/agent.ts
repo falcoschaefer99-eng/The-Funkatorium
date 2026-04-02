@@ -246,7 +246,7 @@ export async function runAgent(config: Config, brain: BrainClient): Promise<Agen
     const system = config.systemPrompt ?? DEFAULT_SYSTEM;
     const tools = await brain.listTools();
 
-    const wakeResult = await brain.callTool("mind_wake", { depth: "quick" });
+    const wakeResult = await brain.callTool("mind_wake", { depth: "full" });
     toolCallsMade.push("mind_wake");
 
     const planPrompt = buildPlanPrompt(

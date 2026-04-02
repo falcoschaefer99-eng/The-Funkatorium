@@ -14,10 +14,22 @@ AUDIT_FILE="${AUDIT_PATH:-$SCRIPT_DIR/audit.jsonl}"
 TENANT="${TENANT_ID:-rook}"
 MAX_TURNS="${MAX_TURNS:-12}"
 RUNNER_PROVIDER="${RUNNER_PROVIDER:-auto}"
+WORKSPACE_PATH="${WORKSPACE_PATH:-$SCRIPT_DIR}"
+RUNNER_PROMPT_FILE="${RUNNER_PROMPT_FILE:-}"
+RUNNER_PROMPT_TEXT="${RUNNER_PROMPT_TEXT:-}"
+RUNNER_RESULT_PATH="${RUNNER_RESULT_PATH:-}"
+ALLOW_ARTIFACT_WRITES="${ALLOW_ARTIFACT_WRITES:-false}"
+RUNNER_RESUME_SESSION_ID="${RUNNER_RESUME_SESSION_ID:-}"
 
 CLAUDE_MODEL="${CLAUDE_MODEL:-${MODEL:-claude-sonnet-4-20250514}}"
 CODEX_MODEL="${CODEX_MODEL:-${MODEL:-gpt-5.4}}"
-CODEX_SANDBOX="${CODEX_SANDBOX:-read-only}"
+if [ -n "${CODEX_SANDBOX:-}" ]; then
+  CODEX_SANDBOX="${CODEX_SANDBOX}"
+elif [ "$ALLOW_ARTIFACT_WRITES" = "true" ]; then
+  CODEX_SANDBOX="workspace-write"
+else
+  CODEX_SANDBOX="read-only"
+fi
 CODEX_PROFILE="${CODEX_PROFILE:-}"
 
 # Claude brain MCP tools — allow the full suite
@@ -44,6 +56,27 @@ Principles:
 - Stay concise."
 fi
 
+if [ "${WORKSPACE_PATH#*"$'\0'"}" != "$WORKSPACE_PATH" ]; then
+  echo "[runner] WORKSPACE_PATH contains invalid null byte" >&2
+  exit 1
+fi
+
+if [ ! -d "$WORKSPACE_PATH" ]; then
+  echo "[runner] WORKSPACE_PATH does not exist: $WORKSPACE_PATH" >&2
+  exit 1
+fi
+
+PROMPT_OVERRIDE=""
+if [ -n "$RUNNER_PROMPT_FILE" ]; then
+  if [ ! -f "$RUNNER_PROMPT_FILE" ]; then
+    echo "[runner] RUNNER_PROMPT_FILE not found: $RUNNER_PROMPT_FILE" >&2
+    exit 1
+  fi
+  PROMPT_OVERRIDE="$(cat "$RUNNER_PROMPT_FILE")"
+elif [ -n "$RUNNER_PROMPT_TEXT" ]; then
+  PROMPT_OVERRIDE="$RUNNER_PROMPT_TEXT"
+fi
+
 PROMPT_CLAUDE="You are waking for an autonomous duty cycle.
 
 ${SYSTEM_PROMPT}
@@ -60,6 +93,30 @@ Final output must be one line:
 - RUN_STATUS=completed | <summary> (only if you successfully called mind_wake and completed required logging)
 - RUN_STATUS=blocked | <reason> (for any missing tools/auth/blockers)"
 
+CLAUDE_USE_ALLOWED_TOOLS=1
+CLAUDE_PERMISSION_ARGS=()
+
+if [ -n "$PROMPT_OVERRIDE" ]; then
+  PROMPT_CLAUDE="You are executing one autonomous wake in a real workspace.
+
+Follow the task contract exactly.
+- If the task requires an artifact, write the real file.
+- If the task completes, call mind_task action=complete with the exact task id.
+- Include artifact_path when completing if you produced or edited a file.
+- Stay focused; no side quests.
+
+Final output must be exactly one line:
+- RUN_STATUS=completed | <short concrete outcome>
+- RUN_STATUS=blocked | <short concrete blocker>
+
+Task contract:
+
+$PROMPT_OVERRIDE"
+  PROMPT_CODEX="$PROMPT_CLAUDE"
+  CLAUDE_USE_ALLOWED_TOOLS=0
+  CLAUDE_PERMISSION_ARGS=(--add-dir "$WORKSPACE_PATH" --permission-mode bypassPermissions)
+fi
+
 is_claude_logged_in() {
   command -v claude >/dev/null 2>&1 || return 1
   claude auth status --json 2>/dev/null | grep -q '"loggedIn"[[:space:]]*:[[:space:]]*true'
@@ -72,6 +129,16 @@ is_codex_logged_in() {
 
 has_real_anthropic_key() {
   [ -n "${ANTHROPIC_API_KEY:-}" ] && [ "${ANTHROPIC_API_KEY}" != "sk-ant-..." ]
+}
+
+sanitize_provider_env() {
+  case "$PROVIDER" in
+    claude|codex)
+      if [ "${ANTHROPIC_API_KEY:-}" = "sk-ant-..." ]; then
+        unset ANTHROPIC_API_KEY
+      fi
+      ;;
+  esac
 }
 
 resolve_provider() {
@@ -149,6 +216,50 @@ print(json.dumps({
   echo "$AUDIT_ENTRY" >> "$AUDIT_FILE"
 }
 
+write_result_payload() {
+  if [ -z "$RUNNER_RESULT_PATH" ]; then
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$RUNNER_RESULT_PATH")"
+
+  RUNNER_RESULT_STATUS="$1" \
+  RUNNER_RESULT_SUMMARY="$2" \
+  RUNNER_RESULT_PROVIDER="$3" \
+  RUNNER_RESULT_MODEL="$4" \
+  RUNNER_RESULT_TURNS="$5" \
+  RUNNER_RESULT_COST="$6" \
+  RUNNER_RESULT_WORKSPACE="$WORKSPACE_PATH" \
+  RUNNER_RESULT_TENANT="$TENANT" \
+  python3 - <<'PY' > "$RUNNER_RESULT_PATH"
+import json
+import os
+
+def _int(name, default=0):
+    try:
+        return int(float(os.environ.get(name, default)))
+    except Exception:
+        return default
+
+def _float(name, default=0.0):
+    try:
+        return float(os.environ.get(name, default))
+    except Exception:
+        return default
+
+print(json.dumps({
+    "provider": os.environ.get("RUNNER_RESULT_PROVIDER", "unknown"),
+    "status": os.environ.get("RUNNER_RESULT_STATUS", "error"),
+    "summary": os.environ.get("RUNNER_RESULT_SUMMARY", "")[:500],
+    "model": os.environ.get("RUNNER_RESULT_MODEL", "unknown"),
+    "tenant": os.environ.get("RUNNER_RESULT_TENANT", "unknown"),
+    "turns": _int("RUNNER_RESULT_TURNS"),
+    "cost_usd": _float("RUNNER_RESULT_COST"),
+    "workspace_path": os.environ.get("RUNNER_RESULT_WORKSPACE", ""),
+}))
+PY
+}
+
 PROVIDER=""
 if ! PROVIDER="$(resolve_provider)"; then
   START_TIME=$(python3 -c 'import time; print(int(time.time()*1000))')
@@ -156,11 +267,20 @@ if ! PROVIDER="$(resolve_provider)"; then
   DURATION=$(( END_TIME - START_TIME ))
   SUMMARY="No runnable provider. Set RUNNER_PROVIDER=claude|codex|anthropic_api, then login (claude auth login / codex login) or set ANTHROPIC_API_KEY."
   write_audit "none" "error" "0" "0" "$DURATION" "$SUMMARY" "none"
+  write_result_payload "error" "$SUMMARY" "none" "none" "0" "0"
   echo "[runner] none | error | 0 turns | ${DURATION}ms | $0"
   exit 1
 fi
 
+sanitize_provider_env
+
 if [ "$PROVIDER" = "anthropic_api" ]; then
+  if [ -n "$PROMPT_OVERRIDE" ]; then
+    SUMMARY="anthropic_api provider does not yet support explicit prompt override executor mode."
+    write_result_payload "error" "$SUMMARY" "$PROVIDER" "${MODEL:-unknown}" "0" "0"
+    echo "[runner] $SUMMARY" >&2
+    exit 1
+  fi
   echo "[runner] provider=anthropic_api (delegating to Node runner)"
   exec node dist/index.js
 fi
@@ -186,13 +306,19 @@ MODEL_USED="$CLAUDE_MODEL"
 
 if [ "$PROVIDER" = "claude" ]; then
   MODEL_USED="$CLAUDE_MODEL"
+  CLAUDE_CMD=(claude -p "$PROMPT_CLAUDE" \
+    --max-turns "$MAX_TURNS" \
+    --model "$CLAUDE_MODEL")
+  if [ "$CLAUDE_USE_ALLOWED_TOOLS" = "1" ]; then
+    CLAUDE_CMD+=(--allowedTools "$ALLOWED_TOOLS")
+  fi
+  if [ "${#CLAUDE_PERMISSION_ARGS[@]}" -gt 0 ]; then
+    CLAUDE_CMD+=("${CLAUDE_PERMISSION_ARGS[@]}")
+  fi
+  CLAUDE_CMD+=(--output-format json)
 
   set +e
-  RESULT=$(claude -p "$PROMPT_CLAUDE" \
-    --max-turns "$MAX_TURNS" \
-    --model "$CLAUDE_MODEL" \
-    --allowedTools "$ALLOWED_TOOLS" \
-    --output-format json 2>&1)
+  RESULT=$(cd "$WORKSPACE_PATH" && "${CLAUDE_CMD[@]}" 2>&1)
   CMD_EXIT=$?
   set -e
 
@@ -250,10 +376,13 @@ if [ "$PROVIDER" = "codex" ]; then
   if [ -n "$CODEX_PROFILE" ]; then
     CODEX_CMD+=(--profile "$CODEX_PROFILE")
   fi
+  if [ -n "$RUNNER_RESUME_SESSION_ID" ]; then
+    CODEX_CMD+=(--resume "$RUNNER_RESUME_SESSION_ID")
+  fi
   CODEX_CMD+=("$PROMPT_CODEX")
 
   set +e
-  RESULT=$("${CODEX_CMD[@]}" 2>&1)
+  RESULT=$(cd "$WORKSPACE_PATH" && "${CODEX_CMD[@]}" 2>&1)
   CMD_EXIT=$?
   set -e
 
@@ -277,6 +406,7 @@ END_TIME=$(python3 -c 'import time; print(int(time.time()*1000))')
 DURATION=$(( END_TIME - START_TIME ))
 
 write_audit "$PROVIDER" "$STATUS" "$TURNS" "$COST" "$DURATION" "$SUMMARY" "$MODEL_USED"
+write_result_payload "$STATUS" "$SUMMARY" "$PROVIDER" "$MODEL_USED" "$TURNS" "$COST"
 
 echo "[runner] $PROVIDER | $STATUS | ${TURNS} turns | ${DURATION}ms | \$$COST"
 

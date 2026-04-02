@@ -1,0 +1,27 @@
+{
+  "timezone": "Europe/Berlin",
+  "tenants": {
+    "rook": {
+      "provider": "claude",
+      "workspace_path": "/Users/falco/Documents/MUSE",
+      "enabled": true,
+      "personal_wakes": ["09:00", "15:00", "21:00"],
+      "impulse_enabled": true,
+      "telegram_enabled": true,
+      "nightly_dream_enabled": true,
+      "nightly_dream_time": "03:30",
+      "impulse_check_interval_minutes": 180
+    },
+    "rainer": {
+      "provider": "claude",
+      "workspace_path": "/Users/falco/AI/rainer-workspace",
+      "enabled": true,
+      "personal_wakes": ["06:00"],
+      "impulse_enabled": false,
+      "telegram_enabled": true,
+      "nightly_dream_enabled": true,
+      "nightly_dream_time": "03:45",
+      "impulse_check_interval_minutes": 180
+    }
+  }
+}

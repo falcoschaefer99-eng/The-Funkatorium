@@ -6,7 +6,9 @@
 		"deploy": "wrangler deploy",
 		"dev": "wrangler dev",
 		"start": "wrangler dev",
-		"test": "vitest",
+		"test": "vitest -c vitest.unit.config.mts",
+		"test:unit": "vitest -c vitest.unit.config.mts",
+		"test:workers": "vitest",
 		"cf-typegen": "wrangler types"
 	},
 	"devDependencies": {

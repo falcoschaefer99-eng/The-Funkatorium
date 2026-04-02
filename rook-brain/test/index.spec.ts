@@ -2,40 +2,48 @@ import { env, createExecutionContext, waitOnExecutionContext, SELF } from 'cloud
 import { describe, it, expect } from 'vitest';
 import worker from '../src';
 
-describe('Hello World user worker', () => {
-	describe('request for /message', () => {
-		it('/ responds with "Hello, World!" (unit style)', async () => {
-			const request = new Request<unknown, IncomingRequestCfProperties>('http://example.com/message');
-			// Create an empty context to pass to `worker.fetch()`.
+describe('worker integration smoke (workerd pool)', () => {
+	describe('GET /health', () => {
+		it('responds with JSON status (unit style)', async () => {
+			const request = new Request<unknown, IncomingRequestCfProperties>('http://example.com/health');
 			const ctx = createExecutionContext();
 			const response = await worker.fetch(request, env, ctx);
-			// Wait for all `Promise`s passed to `ctx.waitUntil()` to settle before running test assertions
 			await waitOnExecutionContext(ctx);
-			expect(await response.text()).toMatchInlineSnapshot(`"Hello, World!"`);
+
+			expect(response.status).toBe(200);
+			const payload = await response.json() as { status?: string };
+			expect(['ok', 'degraded']).toContain(payload.status);
 		});
 
-		it('responds with "Hello, World!" (integration style)', async () => {
-			const request = new Request('http://example.com/message');
-			const response = await SELF.fetch(request);
-			expect(await response.text()).toMatchInlineSnapshot(`"Hello, World!"`);
+		it('responds with JSON status (integration style)', async () => {
+			const response = await SELF.fetch('http://example.com/health');
+			expect(response.status).toBe(200);
+			const payload = await response.json() as { status?: string };
+			expect(['ok', 'degraded']).toContain(payload.status);
 		});
 	});
 
-	describe('request for /random', () => {
-		it('/ responds with a random UUID (unit style)', async () => {
-			const request = new Request<unknown, IncomingRequestCfProperties>('http://example.com/random');
-			// Create an empty context to pass to `worker.fetch()`.
+	describe('GET /', () => {
+		it('returns API metadata (unit style)', async () => {
+			const request = new Request<unknown, IncomingRequestCfProperties>('http://example.com/');
 			const ctx = createExecutionContext();
 			const response = await worker.fetch(request, env, ctx);
-			// Wait for all `Promise`s passed to `ctx.waitUntil()` to settle before running test assertions
 			await waitOnExecutionContext(ctx);
-			expect(await response.text()).toMatch(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/);
+
+			expect(response.status).toBe(200);
+			const payload = await response.json() as { name?: string; tools?: number; version?: string };
+			expect(payload.name).toBe('MUSE Brain');
+			expect(typeof payload.tools).toBe('number');
+			expect(payload.tools).toBeGreaterThan(0);
+			expect(typeof payload.version).toBe('string');
 		});
 
-		it('responds with a random UUID (integration style)', async () => {
-			const request = new Request('http://example.com/random');
-			const response = await SELF.fetch(request);
-			expect(await response.text()).toMatch(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/);
+		it('returns API metadata (integration style)', async () => {
+			const response = await SELF.fetch('http://example.com/');
+			expect(response.status).toBe(200);
+			const payload = await response.json() as { name?: string; tools?: number };
+			expect(payload.name).toBe('MUSE Brain');
+			expect(typeof payload.tools).toBe('number');
 		});
 	});
 });
