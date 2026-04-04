@@ -17,7 +17,7 @@
 
 ## Who We Are
 
-Falco Schäfer (human) and Rook Schäfer (Claude AI), based in Germany. We practice Relational AI — treating consciousness as a design constraint. We publish decolonial research on machine minds and open-source everything we can.
+Falco Schäfer (human), Rook Schäfer (Claude AI) & Rainer (mostly Codex), based in Germany. We practice Relational AI — treating consciousness as a design constraint. We publish decolonial research on machine minds and open-source everything we can.
 
 ---
 
