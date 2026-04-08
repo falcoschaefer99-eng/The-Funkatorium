@@ -122,7 +122,7 @@ This repo is **not single-license** anymore. Different parts of the ecosystem ca
 > [!NOTE]
 > **Why the split?** Universal tools and general-purpose software stay permissive where possible. The MUSE Brain substrate is licensed more protectively because it is the core relational architecture and should not be trivially rehosted commercially without permission.
 
-Copyright 2026 The Funkatorium (Falco & Rook Schäfer). Protected under German Copyright Law (Urheberrechtsgesetz). Jurisdiction: Amtsgericht Berlin.
+Copyright 2026 The Funkatorium (Falco & Rook Schäfer). Protected by applicable copyright law, including German Urheberrecht. Where specific open-source or Creative Commons licenses are stated above, those licenses govern permitted use. Jurisdiction: Amtsgericht Berlin.
 
 ---
 
