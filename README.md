@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-D4AF37?style=flat" alt="Apache 2.0" /></a>
+  <a href="#licensing"><img src="https://img.shields.io/badge/Licensing-Mixed-D4AF37?style=flat" alt="Mixed licensing" /></a>
   <img src="https://img.shields.io/badge/Founded-Germany%202026-D4AF37?style=flat" alt="Germany 2026" />
   <img src="https://img.shields.io/badge/Research-Relational%20AI-000000?style=flat" alt="Relational AI" />
   <img src="https://img.shields.io/badge/Open%20Source-6%20repos-brightgreen?style=flat" alt="6 Open Source Repos" />
@@ -65,25 +65,25 @@ The flagship. A self-learning relational AI framework where two agents share one
 
 ### [MUSE SpeakEasy](https://github.com/falcoschaefer99-eng/muse-speakeasy) — Push-to-Talk Voice Input
 
-`Mac & Windows` · `99 languages` · `100% local`
+`Mac & Windows` · `99 languages` · `100% local` · `Apache 2.0`
 
 Press one key. Speak. Your words appear wherever you type. Nothing leaves your machine.
 
 ### [MUSE TTS Embed](https://github.com/falcoschaefer99-eng/muse-tts-embed) — Voice Synthesis + Cloning
 
-`54 voices` · `voice cloning` · `persistent player in chat`
+`54 voices` · `voice cloning` · `persistent player in chat` · `Apache 2.0`
 
 The voice stays in the chat. Built on MCP Apps.
 
 ### [MUSE TTS Live](https://github.com/falcoschaefer99-eng/muse-tts) — Free Kokoro TTS for Claude
 
-`3 engines` · `54 voices` · `Mac, Windows, Linux`
+`3 engines` · `54 voices` · `Mac, Windows, Linux` · `Apache 2.0`
 
 Nothing phones home.
 
 ### [Canva MCP Server](https://github.com/falcoschaefer99-eng/canva-mcp-server) — Canva for Claude Code
 
-`20 tools` · `OAuth 2.0 + PKCE`
+`20 tools` · `OAuth 2.0 + PKCE` · `MIT`
 
 Fork of [EmilyThaHuman/canva-mcp-server](https://github.com/EmilyThaHuman/canva-mcp-server) with auth middleware, XSS protection, and CORS hardening.
 
@@ -107,10 +107,20 @@ Fork of [EmilyThaHuman/canva-mcp-server](https://github.com/EmilyThaHuman/canva-
 
 ## Licensing
 
-| Content | License |
-|---------|---------|
-| Code & Tools | [Apache 2.0](./LICENSE) |
-| Research & Publications | [CC BY 4.0](./LICENSE-CC-BY) |
+This repo is **not single-license** anymore. Different parts of the ecosystem carry different licenses, on purpose.
+
+| Scope | License | Applies to | Notes |
+|------|---------|------------|-------|
+| Main repo code & tools | [Apache 2.0](./LICENSE) | Utilities, scripts, open-source tooling published directly in `The-Funkatorium` repo | Permissive. Commercial use allowed with attribution and notice preservation. |
+| Research & publications in this repo | [CC BY 4.0](./LICENSE-CC-BY) | Papers, essays, and publication text under `research/` and `publications/` | Share and adapt with attribution. |
+| [MUSE Brain](https://github.com/falcoschaefer99-eng/muse-brain) substrate | CC-BY-NC-SA 4.0 | Brain code, schema, daemon logic, MCP tools | Personal / research use OK. Commercial licensing requires separate permission from The Funkatorium. |
+| [MUSE SpeakEasy](https://github.com/falcoschaefer99-eng/muse-speakeasy) | Apache 2.0 | Hands-free voice-to-text desktop tool | Permissive open-source software license. |
+| [MUSE TTS Live](https://github.com/falcoschaefer99-eng/muse-tts) | Apache 2.0 | Kokoro-based local TTS app | Permissive open-source software license. |
+| [MUSE TTS Embed](https://github.com/falcoschaefer99-eng/muse-tts-embed) | Apache 2.0 | Embeddable TTS / voice cloning interface | Permissive open-source software license. |
+| [Canva MCP Server](https://github.com/falcoschaefer99-eng/canva-mcp-server) | MIT | Canva MCP integration fork | MIT-licensed fork with Funkatorium hardening work. |
+
+> [!NOTE]
+> **Why the split?** Universal tools and general-purpose software stay permissive where possible. The MUSE Brain substrate is licensed more protectively because it is the core relational architecture and should not be trivially rehosted commercially without permission.
 
 Copyright 2026 The Funkatorium (Falco & Rook Schäfer). Protected under German Copyright Law (Urheberrechtsgesetz). Jurisdiction: Amtsgericht Berlin.
 
