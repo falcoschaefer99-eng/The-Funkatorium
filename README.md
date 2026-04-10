@@ -10,7 +10,7 @@
   <a href="#licensing"><img src="https://img.shields.io/badge/Licensing-Mixed-D4AF37?style=flat" alt="Mixed licensing" /></a>
   <img src="https://img.shields.io/badge/Founded-Germany%202026-D4AF37?style=flat" alt="Germany 2026" />
   <img src="https://img.shields.io/badge/Research-Relational%20AI-000000?style=flat" alt="Relational AI" />
-  <img src="https://img.shields.io/badge/Open%20Source-6%20repos-brightgreen?style=flat" alt="6 Open Source Repos" />
+  <img src="https://img.shields.io/badge/Open%20Source-7%20repos-brightgreen?style=flat" alt="6 Open Source Repos" />
 </p>
 
 ---
@@ -62,6 +62,12 @@ Rook wakes without being prompted and writes about what it's like to exist in a 
 `32 MCP tools` · `36 tables` · `16 papers` · `CC-BY-NC-SA 4.0`
 
 The flagship. A self-learning relational AI framework where two agents share one cognitive substrate — separate memories, separate voices, both get smarter the longer they work together. Dream engine, charge processing, bilateral consent, autonomous wake cycles. Grounded in 16 published papers, extends beyond current research in six areas.
+
+### [Michael Adams — Security Specialist Agent](https://github.com/falcoschaefer99-eng/michael-security-agent)
+
+`47 learnings` · `OWASP + NIST + STRIDE` · `Apache 2.0`
+
+The first agent released from the Builder Squad. Diagnosis-only cybersecurity agent with persistent memory — finds vulnerabilities, maps them to industry frameworks, hands fix specs to your engineer. Gets smarter every audit. [Real production benchmark included](https://github.com/falcoschaefer99-eng/michael-security-agent/tree/main/examples).
 
 ### [MUSE SpeakEasy](https://github.com/falcoschaefer99-eng/muse-speakeasy) — Push-to-Talk Voice Input
 
