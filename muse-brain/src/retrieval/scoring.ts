@@ -5,11 +5,17 @@ import type { Observation } from "../types";
 import {
 	computeQuerySignalBoosts,
 	getRetrievalProfileConfig,
+	hasAnchoredTemporalReference,
+	type RetrievalProfileConfig,
 	type QuerySignals,
 	type RetrievalProfile
 } from "./query-signals";
+import { clamp } from "./utils";
 
 const KEYWORD_MATCH_FLOOR = 0.35;
+const LAYER_WEIGHT_MIN_RELEVANCE = 0.55;
+const LAYER_WEIGHT_MIN_COGNITION = 0.2;
+const LAYER_WEIGHT_MAX = 1.7;
 
 const GRIP_MULTIPLIER: Record<string, number> = {
 	iron: 1.3,
@@ -25,6 +31,29 @@ const CHARGE_PHASE_MULTIPLIER: Record<string, number> = {
 	processing: 1.0,
 	metabolized: 0.85
 };
+
+export interface HybridDynamicWeightModifier {
+	signal: string;
+	delta_relevance: number;
+	delta_cognition: number;
+	reason: string;
+}
+
+export interface HybridDynamicWeights {
+	baseline: {
+		relevance: number;
+		cognition: number;
+	};
+	modifiers: HybridDynamicWeightModifier[];
+	total_delta: {
+		relevance: number;
+		cognition: number;
+	};
+	applied: {
+		relevance: number;
+		cognition: number;
+	};
+}
 
 export interface HybridScoreBreakdown {
 	profile: RetrievalProfile;
@@ -45,16 +74,34 @@ export interface HybridScoreBreakdown {
 		circadian_multiplier: number;
 		weighted_multiplier: number;
 	};
+	dynamic_weights: HybridDynamicWeights;
 	signals: {
 		quoted_phrases: string[];
 		proper_names: string[];
 		temporal_query: boolean;
 		assistant_reference_query: boolean;
+		emotional_state_query: boolean;
+		contradiction_query: boolean;
+		relational_query: boolean;
+		relational_intensity: number;
+		territory_cues: string[];
 		quoted_phrase_matches: string[];
 		proper_name_matches: string[];
 		temporal_matched: boolean;
 		temporal_reasons: string[];
 		assistant_reference_matched: boolean;
+	};
+	rerank?: {
+		mode: "off" | "heuristic" | "model";
+		applied: boolean;
+		base_rank?: number;
+		final_rank?: number;
+		base_score?: number;
+		final_score?: number;
+		delta_score?: number;
+		heuristic_delta?: number;
+		model_delta?: number;
+		reasons?: string[];
 	};
 }
 
@@ -85,6 +132,168 @@ function normalizeKeywordComponent(keywordRank: number | undefined, maxKeywordRa
 	return Math.max(0, keywordRank) / maxKeywordRank;
 }
 
+function computeDynamicLayerWeights(
+	profileConfig: RetrievalProfileConfig,
+	querySignals: QuerySignals,
+	territory: string
+): HybridDynamicWeights {
+	const modifiers: HybridDynamicWeightModifier[] = [];
+	const addModifier = (
+		signal: string,
+		deltaRelevance: number,
+		deltaCognition: number,
+		reason: string
+	): void => {
+		modifiers.push({
+			signal,
+			delta_relevance: deltaRelevance,
+			delta_cognition: deltaCognition,
+			reason
+		});
+	};
+
+	if (querySignals.assistant_reference.detected) {
+		addModifier(
+			"assistant_reference",
+			0.12,
+			-0.06,
+			"Assistant-reference wording usually needs higher literal relevance weight."
+		);
+	}
+
+	if (querySignals.quoted_phrases.length > 0) {
+		addModifier(
+			"quoted_phrase",
+			0.06,
+			0,
+			"Quoted phrases typically indicate precision recall intent."
+		);
+	}
+
+	if (querySignals.proper_names.length > 0) {
+		addModifier(
+			"proper_name",
+			0.05,
+			0,
+			"Named entities indicate specific lookup over broad surfacing."
+		);
+	}
+
+	if (querySignals.temporal.has_temporal_cue) {
+		addModifier(
+			"temporal",
+			0.06,
+			0.01,
+			"Temporal framing benefits from stronger Layer A retrieval alignment."
+		);
+		if (querySignals.proper_names.length > 0) {
+			addModifier(
+				"temporal_entity_combo",
+				0.04,
+				0.02,
+				"Time + entity combo usually maps to exact-event retrieval."
+			);
+		}
+	}
+
+	if (querySignals.relational.detected) {
+		addModifier(
+			"relational",
+			-0.02,
+			0.1,
+			"Relational phrasing increases value of cognitive modulation."
+		);
+		if (querySignals.relational.intensity >= 0.65) {
+			addModifier(
+				"relational_high_intensity",
+				0,
+				0.08,
+				"High-intensity relational cues benefit from stronger Layer B influence."
+			);
+		}
+	}
+
+	if (querySignals.emotional_state.detected) {
+		addModifier(
+			"emotional_state",
+			-0.01,
+			0.1,
+			"Emotion-state queries should preserve affective/experiential weighting."
+		);
+	}
+
+	if (querySignals.contradiction.detected) {
+		addModifier(
+			"contradiction",
+			0.02,
+			0.08,
+			"Contradiction searches benefit from cognitive context + relevance balance."
+		);
+	}
+
+	const backwardTemporalDetected = (querySignals.temporal.backward_cues?.length ?? 0) > 0;
+	const anchoredTemporalReference = hasAnchoredTemporalReference(querySignals.temporal);
+	if (backwardTemporalDetected && anchoredTemporalReference) {
+		addModifier(
+			"backward_temporal",
+			0.02,
+			-0.18,
+			"Backward-looking temporal phrasing should reduce recency-heavy cognitive amplification."
+		);
+		if (querySignals.contradiction.detected) {
+			addModifier(
+				"backward_temporal_contradiction",
+				0,
+				-0.42,
+				"Backward contradiction lookup: suppress freshness bias to surface earlier state evidence."
+			);
+		}
+	}
+
+	if (querySignals.territory.mentioned.length > 0) {
+		if (querySignals.territory.mentioned.includes(territory)) {
+			addModifier(
+				"territory_focus_match",
+				0.07,
+				0.04,
+				"Candidate territory matches explicit query territory cue."
+			);
+		} else {
+			addModifier(
+				"territory_focus_miss",
+				-0.04,
+				-0.02,
+				"Softly downweight candidates outside explicitly requested territories."
+			);
+		}
+	}
+
+	const totalDelta = modifiers.reduce(
+		(acc, modifier) => {
+			acc.relevance += modifier.delta_relevance;
+			acc.cognition += modifier.delta_cognition;
+			return acc;
+		},
+		{ relevance: 0, cognition: 0 }
+	);
+
+	return {
+		baseline: {
+			relevance: profileConfig.layer_weights.relevance,
+			cognition: profileConfig.layer_weights.cognition
+		},
+		modifiers,
+		total_delta: {
+			relevance: totalDelta.relevance,
+			cognition: totalDelta.cognition
+		},
+		applied: {
+			relevance: clamp(profileConfig.layer_weights.relevance + totalDelta.relevance, LAYER_WEIGHT_MIN_RELEVANCE, LAYER_WEIGHT_MAX),
+			cognition: clamp(profileConfig.layer_weights.cognition + totalDelta.cognition, LAYER_WEIGHT_MIN_COGNITION, LAYER_WEIGHT_MAX)
+		}
+	};
+}
+
 export function scoreHybridCandidate(input: HybridCandidateScoreInput): HybridCandidateScoreResult | null {
 	const {
 		observation,
@@ -102,6 +311,7 @@ export function scoreHybridCandidate(input: HybridCandidateScoreInput): HybridCa
 	} = input;
 
 	const profileConfig = getRetrievalProfileConfig(retrieval_profile);
+	const dynamicWeights = computeDynamicLayerWeights(profileConfig, query_signals, territory);
 	const texture = observation.texture || {};
 	const grip = texture.grip ?? "present";
 	const chargePhase = texture.charge_phase ?? "processing";
@@ -162,7 +372,7 @@ export function scoreHybridCandidate(input: HybridCandidateScoreInput): HybridCa
 
 	const adjustedRelevance = Math.max(
 		0,
-		(baseRelevance + entityComponent + signalMatch.total_boost) * profileConfig.layer_weights.relevance
+		(baseRelevance + entityComponent + signalMatch.total_boost) * dynamicWeights.applied.relevance
 	);
 	if (adjustedRelevance <= 0) return null;
 
@@ -173,7 +383,7 @@ export function scoreHybridCandidate(input: HybridCandidateScoreInput): HybridCa
 		: 1.0;
 	const circadianMultiplier = circadian_bias_matched ? 1.15 : 1.0;
 	const baseMultiplier = gripMultiplier * chargePhaseMultiplier * noveltyMultiplier * circadianMultiplier;
-	const weightedMultiplier = 1 + ((baseMultiplier - 1) * profileConfig.layer_weights.cognition);
+	const weightedMultiplier = 1 + ((baseMultiplier - 1) * dynamicWeights.applied.cognition);
 	const score = adjustedRelevance * weightedMultiplier;
 
 	if (score < min_similarity) return null;
@@ -200,11 +410,17 @@ export function scoreHybridCandidate(input: HybridCandidateScoreInput): HybridCa
 				circadian_multiplier: circadianMultiplier,
 				weighted_multiplier: weightedMultiplier
 			},
+			dynamic_weights: dynamicWeights,
 			signals: {
 				quoted_phrases: query_signals.quoted_phrases,
 				proper_names: query_signals.proper_names,
 				temporal_query: query_signals.temporal.has_temporal_cue,
 				assistant_reference_query: query_signals.assistant_reference.detected,
+				emotional_state_query: query_signals.emotional_state.detected,
+				contradiction_query: query_signals.contradiction.detected,
+				relational_query: query_signals.relational.detected,
+				relational_intensity: query_signals.relational.intensity,
+				territory_cues: query_signals.territory.mentioned,
 				quoted_phrase_matches: signalMatch.quoted_phrase_matches,
 				proper_name_matches: signalMatch.proper_name_matches,
 				temporal_matched: signalMatch.temporal_matched,

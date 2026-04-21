@@ -176,6 +176,9 @@ Artifacts are assistive retrieval surfaces, **not replacements** for the full ob
    - MUSE-only evaluation set for textured-memory wins
    - Demonstrates where relational/contextual memory beats flat verbatim systems
 
+5. **Flat baseline lane (Sprint 5+)**
+   - Keyword-lean, low-cognition profile used as an explicit control for cognitive-advantage comparisons
+
 ### Standard benchmarks to support
 - LongMemEval
 - LoCoMo
@@ -209,6 +212,7 @@ Sample query families:
   - dataset name + input file
   - run date
   - profile table (`native` / `balanced` / `benchmark`)
+  - for cognitive-advantage claims: both **base** and **rerank** receipts (`native` vs `flat`)
   - artifact paths (`artifact.json`, `summary.md`, `miss-analysis.json`, `run-issues.json`)
 - No "we're best" claims without receipts.
 - No cherry-picking single metrics without showing the full profile table.
@@ -258,7 +262,7 @@ These are engineering targets, not marketing claims.
 **Why it matters:** Improve factual recall inside the existing architecture without flattening MUSE into plain text search.
 
 ### Goals
-- add retrieval profiles (`native`, `balanced`, `benchmark`)
+- add retrieval profiles (`native`, `balanced`, `benchmark`, `flat`)
 - introduce query-signal extraction
 - support larger candidate pools in benchmark/balanced modes
 - add first retrieval boosts:
@@ -391,6 +395,21 @@ These are engineering targets, not marketing claims.
 - profile + signal interplay is inspectable
 - rerank improves edge cases without obscuring baseline behavior
 
+### Sprint 4 implementation decisions (April 10, 2026)
+- Dynamic layer weighting now applies profile baseline + signal-driven modifiers per candidate and logs full deltas in `score_breakdown.dynamic_weights`.
+- Query signal surface expanded to include:
+  - emotional-state cues
+  - contradiction cues
+  - relational-intensity cues
+  - territory cues
+- Hybrid search now supports optional rerank controls:
+  - `rerank_mode`: `off | heuristic | model`
+  - `rerank_top_n`: cap rerank pass to top-N candidates
+  - benchmark profile defaults to heuristic rerank when mode is not explicitly set
+- Heuristic rerank stage now logs per-result deltas (`rerank_trace`) including score/rank shifts and reasons.
+- Optional model-assisted rerank hook is available behind `rerank_mode=model`; missing/failing hooks safely fall back to heuristic behavior.
+- Benchmark harness + CLI now pass rerank controls and emit rerank delta fields in top result artifacts.
+
 ---
 
 ## Sprint 5 — Cognitive Advantage Suite
@@ -489,12 +508,12 @@ When this lane ships, it should include all of the following:
 - [x] define future state snapshot hint lane
 
 ### Sprint 4 — Dynamic Weighting & Rerank
-- [ ] define baseline profile weights
-- [ ] define signal-driven weight modifiers
-- [ ] implement dynamic weighting logic
-- [ ] add heuristic rerank stage
-- [ ] add optional model-assisted rerank hook
-- [ ] log rerank deltas for inspection
+- [x] define baseline profile weights
+- [x] define signal-driven weight modifiers
+- [x] implement dynamic weighting logic
+- [x] add heuristic rerank stage
+- [x] add optional model-assisted rerank hook
+- [x] log rerank deltas for inspection
 
 ### Sprint 5 — Cognitive Advantage Suite
 - [ ] define cognitive advantage query families
