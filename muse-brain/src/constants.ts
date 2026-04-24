@@ -1,7 +1,9 @@
 // ============ CONSTANTS ============
 // Pure leaf node — no imports. All shared constant values.
 
-export const ALLOWED_TENANTS = ["companion", "rainer"] as const;
+// "rook" is Falco's production tenant — added back after public-repo scrub stripped it.
+// Do NOT remove on next sync from public muse-brain; this is a private deploy customization.
+export const ALLOWED_TENANTS = ["companion", "rainer", "rook"] as const;
 export type TenantId = typeof ALLOWED_TENANTS[number];
 
 export const TERRITORIES: Record<string, string> = {
