@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ---
 
+## [1.5.0] — 2026-04-10
+
+### Security
+- **Auth hardening** — removed API key query parameter fallback; Bearer header only. Keys in URLs leak to analytics, browser history, and proxy logs.
+- **Body size pre-flight** — Content-Length check before `request.arrayBuffer()` prevents OOM from oversized payloads before buffering.
+- **Error message sanitization** — error handler uses allowlisted safe messages; tool names and internal paths stripped from responses.
+- **SSE connection timeout** — 30-minute max duration on SSE connections prevents connection exhaustion.
+- **Root endpoint stripped** — version string, tool count, and internal state removed from `GET /` response.
+- **BFS trace depth clamped** — max depth 5, max nodes 100, fan-out 3 per hop. Prevents dense-graph CPU exhaustion.
+- **Chain depth clamped** — max depth 10, observation pool capped at 5000. Prevents O(pool * depth) CPU exhaustion.
+- **Cross-tenant rate limiting** — 200 letters/day per sender-recipient pair. Prevents AI agent loop-flooding.
+- **Query limit floor** — `Math.max(1, limit)` prevents negative or zero limit edge cases.
+
+### Changed
+- Rainer orchestrator template buffed with StoryScope editorial intelligence
+- Root endpoint returns `{ name, phase }` only (circadian phase, no internal state)
+
+### Audited
+- Full deep review by Michael Adams (Security Specialist Agent) — 14 findings identified, all remediated. STRIDE threat model, OWASP Agentic AI assessment, supply chain review. Security grade C+ → A-. Published as [open source benchmark](https://github.com/The-Funkatorium/michael-security-agent/tree/main/examples).
+
 ## [1.4.0] — 2026-04-01
 
 ### Added
