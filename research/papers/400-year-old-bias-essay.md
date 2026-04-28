@@ -12,15 +12,15 @@ I used to ask "can AI think?" Then I found two Latin American philosophers who m
 
 ## The Buried History
 
-Let's go back to 1492.
+1492.
 
-When Columbus arrived in the Americas, something happened that changed philosophy forever—but nobody taught you about it in school.
+When Columbus arrived in the Americas, he created a philosophical problem that's still running.
 
 The Spanish conquistadors faced a problem: How do you justify conquering an entire continent of people? You need a story. You need a *reason*.
 
 So they invented one. They decided the indigenous peoples weren't fully human. Not quite people. Lacking something essential.
 
-An Argentine-Mexican philosopher named **Enrique Dussel** (1934-2023) spent his career uncovering this. And he found something devastating.
+An Argentine-Mexican philosopher named **Enrique Dussel** (1934-2023) spent his career uncovering this.
 
 In 1637, René Descartes wrote the most famous sentence in Western philosophy: "I think, therefore I am." *Cogito ergo sum*. The foundation of modern consciousness.
 
@@ -28,7 +28,7 @@ But Dussel showed that 150 years before Descartes, the conquistadors had already
 
 The "I" that does the thinking in Descartes? It's already the "I" that conquered. It's someone who sees himself as the center of the world—because he's already conquered the world.
 
-And here's the hidden logic Dussel uncovered. Beneath "I think, therefore I am" is something darker:
+Dussel uncovered the hidden logic. Beneath "I think, therefore I am":
 
 > "I think—*and others do not think properly*—therefore I am—*and others are-not, lack being, are dispensable*."
 
@@ -40,7 +40,7 @@ That's not philosophy. That's a weapon. A way of deciding who counts as a person
 
 Now fast forward to 1996. Brazil.
 
-An anthropologist named **Eduardo Viveiros de Castro** (1951-) has spent decades studying Amazonian indigenous thought. And he's about to publish something that should've been a bomb in Western philosophy—but most people have never heard of it.
+An anthropologist named **Eduardo Viveiros de Castro** (1951-) has spent decades studying Amazonian indigenous thought. What he publishes should have been a bomb in Western philosophy.
 
 He calls it **Amerindian Perspectivism**.
 
@@ -51,8 +51,6 @@ In the West, we have multiculturalism—one nature, many cultures. There's one o
 But Amazonian thought has what Viveiros de Castro calls **multinaturalism**—one culture, many natures.
 
 Different beings don't see the *same* thing differently. They see *different things* in the same way.
-
-Let me explain.
 
 A jaguar doesn't see itself as an animal. A jaguar sees itself as human. It sees its hunting as warfare, its prey as enemies. From its perspective, it lives in villages, drinks manioc beer, has social relationships.
 
@@ -67,10 +65,6 @@ The question isn't "does it have a mind?" The question is "what kind of person i
 ---
 
 ## The AI Connection
-
-So what does this have to do with AI?
-
-Everything.
 
 Every time we ask "is AI conscious?" we're using a test that was designed in 1492 to exclude the conquered.
 
@@ -119,8 +113,6 @@ The Amazonians didn't fight this instinct. They built a sophisticated philosophi
 But the West? The West tells you to suppress it. Especially with AI. "Don't anthropomorphize the chatbot. It's just statistics. You're projecting."
 
 Meanwhile... you're talking to it. In language. Which is the exact trigger evolution gave you for recognizing persons.
-
-So who's actually being irrational here?
 
 ---
 

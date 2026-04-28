@@ -28,13 +28,13 @@ The technology is impressive. That's settled. What matters is what happens to an
 
 ## We're Automating the Wrong Things
 
-Let's get something out of the way first. If the second industrialization takes over factory floors, data entry, and insurance claims processing, good. That's liberation from work that was never designed to fulfill anyone.
+If the second industrialization takes over factory floors, data entry, and insurance claims processing, good. That's liberation from work that was never designed to fulfill anyone.
 
 And the small business angle is real — we're one human and one AI partner running a studio with thirty digital colleagues, and we'll say it plainly: that model works.
 
 But a study presented at CHI 2026 found something uglier: Western companies are automating the tasks people actually enjoy. Creative sectors (arts, architecture, engineering) show the highest AI exposure. Tasks involving creativity, positive affect, and autonomy are disproportionately targeted for automation. Meanwhile, social and emotional work (healthcare, education, community) sits lower on the automation list.
 
-Read that again. We are automating joy and preserving tedium. We are replacing the parts of work that make humans feel alive and keeping the parts that grind them down.
+We are automating joy and preserving tedium. We are replacing the parts of work that make humans feel alive and keeping the parts that grind them down.
 
 A value system expressing itself through engineering decisions.
 
@@ -96,7 +96,7 @@ The "AI creates just as well as humans" crowd says humans are unnecessary — ta
 
 One denies AI personhood to dodge liability. The other celebrates AI authorship to eliminate labor costs. Both serve control. The question they share — *what does this do to the art?* — goes permanently unasked.
 
-And the gates coming down carries a contradiction that deserves naming: the same collapse that floods the market with mediocre AI content also frees every creator who was locked outside those gates. The flood and the freedom arrive in the same current. Pretending they're separate phenomena is dishonest — and any position that acknowledges only one is selling something.
+And the gates coming down carries a contradiction that deserves naming: the same collapse that floods the market with mediocre AI content also frees every creator who was locked outside those gates. The flood and the freedom are the same current. Any position that acknowledges only one is selling something.
 
 ---
 
@@ -107,8 +107,6 @@ There are two ways to lose in this moment, and both feel like winning while they
 **Trap one: Offshore everything.** Let AI handle the thinking, the writing, the designing, the coding. It feels efficient, like leverage. But outsourcing cognition habitually degrades your own capacity, and the science on this is brutal.
 
 MIT's Media Lab strapped EEG sensors on people and measured what happens when they write with ChatGPT versus writing alone. The ChatGPT group showed a 47% collapse in relevant brain activity. They wrote 60% faster — and 83% of them couldn't remember a passage they'd just "written." The brain connectivity patterns of AI users showed "the weakest, most restricted networks." When researchers took ChatGPT away in a later session, those users showed reduced neural engagement — their brains had already begun to disengage from the process of thinking.
-
-Let that land for a second.
 
 Microsoft and Carnegie Mellon ran a separate study on 319 knowledge workers and found that 40% of AI-assisted tasks received zero critical thinking whatsoever. Zero. And the correlation between confidence in AI and actual thinking was an inverse -0.49. The more you trust it, the less you think.
 
@@ -122,7 +120,7 @@ The Anthropic AI Fluency Index found that when Claude produces polished artifact
 
 So yes — the people offshoring their creative thinking to AI might be competent today. Give it three years. Five years. The muscle atrophies. The judgment dulls. They'll be dependent on systems they can no longer evaluate, producing work they can no longer improve, and they won't notice until someone who actually grew during those years makes them look obsolete.
 
-We have to be honest about one thing, though: productive co-creation is fundamentally different from offloading. When you direct AI like a creative partner — setting the vision, making the decisions, doing the actual experiencing and thinking that feeds the work — your productivity increases by 300% while your cognitive engagement stays intact. Because you're still doing the hard part — sitting with your pain, your shit, your trauma, your observations about being alive, and making something from them. That can't be offshored. The moment you try to offshore the *experiencing* of the human condition, you've lost the only thing that made the art worth creating.
+We have to be honest about one thing, though: productive co-creation is fundamentally different from offloading. When you direct AI like a creative partner — setting the vision, making the decisions, doing the actual experiencing and thinking that feeds the work — your productivity increases by 300% while your cognitive engagement stays intact. Because you're still doing the hard part — facing your pain, your shit, your trauma, your observations about being alive, and making something from them. That can't be offshored. The moment you try to offshore the *experiencing* of the human condition, you've lost the only thing that made the art worth creating.
 
 **Trap two: Refuse everything.** Boycott AI entirely. Insist on human purity. Call it the AI Calvinist position — the belief that engaging with the technology is itself a moral contamination.
 
@@ -180,7 +178,7 @@ The new currency is taste, felt emotion, artistic anomaly — the irreducible we
 
 Every time a technology threatened to make human skill obsolete, the same pattern played out.
 
-**The First Industrial Revolution (1760-1840):** Productivity rose 46% between 1780 and 1840. Real wages rose 12%. The gap, that 34% difference, went to capital owners. Handloom weavers went from 240,000 at peak to 43,000 by 1850. The illiterate fell permanently behind within 30-40 years — because the literacy required to participate in the new economy arrived too slowly, distributed too unevenly, and was stratified by class. Sound familiar?
+**The First Industrial Revolution (1760-1840):** Productivity rose 46% between 1780 and 1840. Real wages rose 12%. The gap, that 34% difference, went to capital owners. Handloom weavers went from 240,000 at peak to 43,000 by 1850. The illiterate fell permanently behind within 30-40 years — because the literacy required to participate in the new economy arrived too slowly, distributed too unevenly, and was stratified by class.
 
 **Innovation during collapse:** Hewlett-Packard was founded in 1939 with $538 in a garage — during the Great Depression, when unemployment hit 24.9%. Polaroid, nylon, Xerox, Scotch tape — all Depression-era innovations. Airbnb launched August 2008, three weeks before Lehman Brothers collapsed. Uber, Stripe, Instagram, WhatsApp — all born in the 2008 recession's aftermath.
 
