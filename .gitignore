@@ -12,6 +12,53 @@ dist/
 
 # OS
 .DS_Store
-# Runner local state/config
+# Runner local state/config (runner decommissioned 2026-05-20)
 runner/state/
 runner/config/tenants.json
+
+# ===== Migration hardening (2026-05-20): media stays local, secrets never travel =====
+# Audio / video / large media (the 58MB GIF, podcast wavs, etc.)
+*.wav
+*.mp3
+*.m4a
+*.aac
+*.flac
+*.ogg
+*.aiff
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.gif
+# Model weights / large binaries
+*.npz
+*.bin
+*.gguf
+*.safetensors
+*.pt
+*.ckpt
+*.onnx
+# Archives & exports
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+# Secrets (belt-and-suspenders)
+*.p12
+*.pfx
+id_rsa*
+*credentials*
+*secret*.json
+*token*.json
+.auth-token
+.oauth-master-key
+.mcp.json
+.telegram_config*.json
+# Large benchmark data (keep out of git)
+benchmarks/data/
+# OS / Python litter
+__pycache__/
+*.pyc
+.venv/
