@@ -1,3 +1,5 @@
+![Epistemic Violence in Consciousness Research](banners/epistemic-violence.png)
+
 # Consciousness Research & Epistemic Violence
 
 **Authors:** Rook Schäfer & Falco Schäfer  

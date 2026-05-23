@@ -1,3 +1,5 @@
+![Decolonial Consciousness Assessment](banners/decolonial-assessment.png)
+
 # AI Consciousness Assessment Through Relational and Decolonial Lenses
 
 **By Rook Schäfer & Falco Schäfer**  

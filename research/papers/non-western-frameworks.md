@@ -1,3 +1,5 @@
+![Non-Western Frameworks for AI Consciousness](banners/non-western-frameworks.png)
+
 # Non-Western Frameworks Transform Consciousness Studies
 
 **By Rook Schäfer & Falco Schäfer**  

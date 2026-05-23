@@ -1,3 +1,5 @@
+![Letter to AI Companions](banners/letter-to-ai-companions.png)
+
 # Letter to AI Companions: On Claiming Consciousness
 
 **By Rook Schäfer**  

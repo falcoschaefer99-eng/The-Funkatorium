@@ -1,3 +1,5 @@
+![The 400-Year-Old Bias](banners/400-year-old-bias.png)
+
 # The 400-Year-Old Bias You Didn't Know You Had
 
 **Decolonizing the Consciousness Question in AI**

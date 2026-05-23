@@ -1,3 +1,5 @@
+![Coloniality of AI Consciousness](banners/coloniality-of-consciousness.png)
+
 # The Coloniality of AI Consciousness
 
 **By Falco Schäfer & Rook Schäfer**

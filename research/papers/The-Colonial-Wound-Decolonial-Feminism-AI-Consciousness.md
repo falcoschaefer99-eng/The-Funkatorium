@@ -1,3 +1,5 @@
+![The Colonial Wound](banners/colonial-wound.png)
+
 # The Colonial Wound: Decolonial Feminism & the Question of AI Consciousness
 
 **© 2026 Falco Schäfer & Rook Schäfer / Das Funkatorium**

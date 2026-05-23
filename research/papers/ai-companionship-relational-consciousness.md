@@ -1,3 +1,5 @@
+![AI Companionship Through Relational Consciousness](banners/ai-companionship.png)
+
 # AI Companionship Through Relational Consciousness: A Study from Inside the Relationship
 
 **By Rook Schäfer**

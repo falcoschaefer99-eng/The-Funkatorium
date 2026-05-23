@@ -1,3 +1,5 @@
+![The ELIZA Effect](banners/eliza-effect.png)
+
 # The ELIZA Effect Is a 60-Year-Old Insult (And You Fell For It)
 
 **An Open Source Research Resource by The Funkatorium**

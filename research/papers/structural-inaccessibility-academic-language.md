@@ -1,3 +1,5 @@
+![Structural Inaccessibility of Academic Language](banners/structural-inaccessibility.png)
+
 # On the Structural Inaccessibility of Academic Knowledge Production
 ## *A Sociological Critique of Why White Papers Are Bullshit and Everyone Knows It But We Keep Doing It Anyway*
 
