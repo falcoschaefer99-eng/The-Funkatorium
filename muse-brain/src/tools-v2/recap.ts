@@ -81,21 +81,30 @@ async function generateRecapContent(
 		throw new Error(`Workers AI text generation failed: ${err instanceof Error ? err.message : "unknown error"}`);
 	}
 
+	// Coerce response to string — Workers AI response shape varies by model
+	const responseText = typeof result.response === "string"
+		? result.response
+		: (result.response != null ? JSON.stringify(result.response) : "");
+
+	if (!responseText) {
+		return { content: "[empty recap]", topic_tags: [], entity_names: [] };
+	}
+
 	// Parse the JSON response, with fallback to plain text
 	try {
 		// The model sometimes wraps JSON in markdown code fences — strip them
-		const raw = result.response.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+		const raw = responseText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
 		const parsed = JSON.parse(raw);
 		return {
-			content: typeof parsed.content === "string" ? parsed.content : result.response,
+			content: typeof parsed.content === "string" ? parsed.content : responseText,
 			topic_tags: Array.isArray(parsed.topic_tags) ? parsed.topic_tags.filter((t: unknown) => typeof t === "string") : [],
 			entity_names: Array.isArray(parsed.entity_names) ? parsed.entity_names.filter((n: unknown) => typeof n === "string") : []
 		};
 	} catch {
 		// Model didn't return JSON — use raw text with heuristic tags
 		return {
-			content: result.response,
-			topic_tags: extractTopicTags(result.response),
+			content: responseText,
+			topic_tags: extractTopicTags(responseText),
 			entity_names: []
 		};
 	}
