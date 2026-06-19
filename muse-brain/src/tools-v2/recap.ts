@@ -12,7 +12,7 @@ import { WorkersAIEmbeddingProvider } from "../embedding/workers-ai";
 
 // ============ TEXT GENERATION ============
 
-const TEXT_GEN_MODEL = "@cf/meta/llama-3.1-8b-instruct";
+const TEXT_GEN_MODEL = "@cf/meta/llama-3.2-3b-instruct";
 
 type AiTextGenRun = (
 	model: string,
