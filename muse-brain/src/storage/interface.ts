@@ -44,7 +44,11 @@ import type {
 	CapturedSkillArtifact,
 	CapturedSkillArtifactCreate,
 	CapturedSkillArtifactFilter,
-	CapturedSkillRegistryHealth
+	CapturedSkillRegistryHealth,
+	Recap,
+	RecapEntityLink,
+	RecapEdge,
+	RecapFilter
 } from "../types";
 import type { QuerySignals, RetrievalProfile } from "../retrieval/query-signals";
 import type { HybridScoreBreakdown } from "../retrieval/scoring";
@@ -539,4 +543,48 @@ export interface IBrainStorage {
 
 	/** Get the most recent wake log entry, newest first. */
 	readLatestWakeLog(): Promise<WakeLogEntry | null>;
+
+	// --- Recaps (Continuity Spine Phase A) ---
+
+	/** Create a new recap node with optional embedding. */
+	createRecap(recap: Omit<Recap, 'id' | 'created_at'>): Promise<Recap>;
+
+	/** Fetch a single recap by ID. */
+	getRecap(recapId: string): Promise<Recap | null>;
+
+	/** List recaps for a session, newest first. */
+	getRecapsBySession(sessionId: string, limit?: number): Promise<Recap[]>;
+
+	/** Get the most recent recap for a session. */
+	getLatestRecapForSession(sessionId: string): Promise<Recap | null>;
+
+	/** Filtered query across recaps. */
+	searchRecaps(filter: RecapFilter): Promise<Recap[]>;
+
+	/** Semantic search across recaps using a query embedding. */
+	searchRecapsBySemantic(
+		queryEmbedding: number[],
+		limit?: number,
+		companion?: string,
+		layer?: string
+	): Promise<Array<Recap & { similarity: number }>>;
+
+	// Recap entity links
+
+	/** Link a recap to a known entity. */
+	linkRecapToEntity(recapId: string, entityId: string, mentionType?: string): Promise<void>;
+
+	/** Get entity links for a recap. */
+	getRecapEntityLinks(recapId: string): Promise<RecapEntityLink[]>;
+
+	/** Get all recaps that mention an entity. */
+	getEntityRecaps(entityId: string, limit?: number): Promise<Recap[]>;
+
+	// Recap edges (graph)
+
+	/** Create a directed edge between two recaps. */
+	createRecapEdge(edge: Omit<RecapEdge, 'created_at'>): Promise<RecapEdge>;
+
+	/** Get recap edges for a recap node. */
+	getRecapEdges(recapId: string, direction?: 'outgoing' | 'incoming' | 'both'): Promise<RecapEdge[]>;
 }

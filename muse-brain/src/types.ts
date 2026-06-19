@@ -622,3 +622,66 @@ export interface AgentRuntimeUsage {
 	last_run_at?: string;
 	last_impulse_run_at?: string;
 }
+
+// --- Recap System (Continuity Spine Phase A) ---
+
+export interface Recap {
+	id: string;
+	tenant_id: string;
+	session_id: string;
+	companion: string;
+	layer: string;
+	content: string;
+	topic_tags: string[];
+	entity_refs: string[];
+	provenance: RecapProvenance;
+	since_seq: number;
+	through_seq: number;
+	message_count: number;
+	token_estimate?: number;
+	consolidated_into?: string;
+	embedding?: number[];
+	created_at: string;
+}
+
+export interface RecapProvenance {
+	ranges: Array<{
+		summary_paragraph: number;
+		seq_range: [number, number];
+		key_messages?: string[];
+	}>;
+	transcript_source?: string;
+	session_id?: string;
+}
+
+export interface RecapEntityLink {
+	recap_id: string;
+	entity_id: string;
+	tenant_id: string;
+	mention_type: string;
+}
+
+export interface RecapEdge {
+	source_id: string;
+	target_id: string;
+	tenant_id: string;
+	edge_type: string;
+	weight: number;
+	metadata?: Record<string, unknown>;
+	created_at: string;
+}
+
+export interface RecapFilter {
+	session_id?: string;
+	companion?: string;
+	layer?: string;
+	since?: string;         // ISO date
+	limit?: number;
+	include_consolidated?: boolean;  // default false — exclude consolidated recaps
+}
+
+export interface RecapMessage {
+	role: string;
+	content: string;
+	seq?: number;
+}

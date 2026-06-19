@@ -71,7 +71,11 @@ import type {
 	CapturedSkillArtifact,
 	CapturedSkillArtifactCreate,
 	CapturedSkillArtifactFilter,
-	CapturedSkillRegistryHealth
+	CapturedSkillRegistryHealth,
+	Recap,
+	RecapEntityLink,
+	RecapEdge,
+	RecapFilter
 } from "../types";
 
 import { TERRITORIES, VALID_TERRITORIES, HARD_BOUNDARIES, RELATIONSHIP_GATES, CIRCADIAN_PHASES, ALLOWED_TENANTS } from "../constants";
@@ -4163,6 +4167,338 @@ export class PostgresBrainStorage implements IBrainStorage {
 			metadata: (row.metadata as Record<string, unknown>) ?? {},
 			created_at: toISOString(row.created_at) || new Date().toISOString(),
 			updated_at: toISOString(row.updated_at) || new Date().toISOString()
+		};
+	}
+
+	// ============ RECAP METHODS (Continuity Spine Phase A) ============
+
+	private _rowToRecap(row: Record<string, unknown>): Recap {
+		return {
+			id: row.id as string,
+			tenant_id: row.tenant_id as string,
+			session_id: row.session_id as string,
+			companion: row.companion as string,
+			layer: row.layer as string,
+			content: row.content as string,
+			topic_tags: Array.isArray(row.topic_tags) ? row.topic_tags as string[] : [],
+			entity_refs: Array.isArray(row.entity_refs) ? row.entity_refs as string[] : [],
+			provenance: parseJsonRecord(row.provenance) as unknown as Recap["provenance"],
+			since_seq: (row.since_seq as number) ?? 0,
+			through_seq: (row.through_seq as number) ?? 0,
+			message_count: (row.message_count as number) ?? 0,
+			token_estimate: row.token_estimate as number | undefined,
+			consolidated_into: row.consolidated_into as string | undefined,
+			created_at: toISOString(row.created_at) || new Date().toISOString()
+			// embedding not returned by default — omit from row reads
+		};
+	}
+
+	async createRecap(recap: Omit<Recap, 'id' | 'created_at'>): Promise<Recap> {
+		const id = generateId("recap");
+		const embeddingLiteral = recap.embedding?.length
+			? `[${recap.embedding.join(",")}]`
+			: null;
+		try {
+			const rows = await this.sql`
+				INSERT INTO recaps (
+					id, tenant_id, session_id, companion, layer, content,
+					topic_tags, entity_refs, provenance,
+					since_seq, through_seq, message_count, token_estimate,
+					consolidated_into, embedding, created_at
+				) VALUES (
+					${id},
+					${this.tenant},
+					${recap.session_id},
+					${recap.companion},
+					${recap.layer},
+					${recap.content},
+					${recap.topic_tags ?? []},
+					${recap.entity_refs ?? []},
+					${JSON.stringify(recap.provenance ?? {})}::jsonb,
+					${recap.since_seq},
+					${recap.through_seq},
+					${recap.message_count},
+					${recap.token_estimate ?? null},
+					${recap.consolidated_into ?? null},
+					${embeddingLiteral ? this.sql`${embeddingLiteral}::vector` : this.sql`NULL`},
+					NOW()
+				)
+				RETURNING id, tenant_id, session_id, companion, layer, content,
+				          topic_tags, entity_refs, provenance, since_seq, through_seq,
+				          message_count, token_estimate, consolidated_into, created_at
+			`;
+			return this._rowToRecap(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			// Handle unique constraint violation from idempotency index (duplicate through_seq for session)
+			const msg = err instanceof Error ? err.message : "unknown error";
+			if (msg.includes("idx_recaps_idempotent") || msg.includes("duplicate key")) {
+				console.log(`createRecap: idempotent duplicate for session=${recap.session_id} through_seq=${recap.through_seq}, returning existing`);
+				const existing = await this.getLatestRecapForSession(recap.session_id);
+				if (existing) return existing;
+			}
+			console.error("createRecap failed:", msg);
+			throw new Error("Failed to create recap");
+		}
+	}
+
+	async getRecap(recapId: string): Promise<Recap | null> {
+		try {
+			const rows = await this.sql`
+				SELECT id, tenant_id, session_id, companion, layer, content,
+				       topic_tags, entity_refs, provenance, since_seq, through_seq,
+				       message_count, token_estimate, consolidated_into, created_at
+				FROM recaps
+				WHERE id = ${recapId}
+				  AND tenant_id = ${this.tenant}
+				LIMIT 1
+			`;
+			if (!rows.length) return null;
+			return this._rowToRecap(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("getRecap failed:", err instanceof Error ? err.message : "unknown error");
+			return null;
+		}
+	}
+
+	async getRecapsBySession(sessionId: string, limit = 20): Promise<Recap[]> {
+		const cap = Math.min(limit, 100);
+		try {
+			const rows = await this.sql`
+				SELECT id, tenant_id, session_id, companion, layer, content,
+				       topic_tags, entity_refs, provenance, since_seq, through_seq,
+				       message_count, token_estimate, consolidated_into, created_at
+				FROM recaps
+				WHERE tenant_id = ${this.tenant}
+				  AND session_id = ${sessionId}
+				  AND consolidated_into IS NULL
+				ORDER BY created_at DESC
+				LIMIT ${cap}
+			`;
+			return rows.map(r => this._rowToRecap(r as Record<string, unknown>));
+		} catch (err) {
+			console.error("getRecapsBySession failed:", err instanceof Error ? err.message : "unknown error");
+			return [];
+		}
+	}
+
+	async getLatestRecapForSession(sessionId: string): Promise<Recap | null> {
+		try {
+			const rows = await this.sql`
+				SELECT id, tenant_id, session_id, companion, layer, content,
+				       topic_tags, entity_refs, provenance, since_seq, through_seq,
+				       message_count, token_estimate, consolidated_into, created_at
+				FROM recaps
+				WHERE tenant_id = ${this.tenant}
+				  AND session_id = ${sessionId}
+				ORDER BY created_at DESC
+				LIMIT 1
+			`;
+			if (!rows.length) return null;
+			return this._rowToRecap(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("getLatestRecapForSession failed:", err instanceof Error ? err.message : "unknown error");
+			return null;
+		}
+	}
+
+	async searchRecaps(filter: RecapFilter): Promise<Recap[]> {
+		const limit = Math.min(filter.limit ?? 20, 100);
+		const sessionId = filter.session_id ?? null;
+		const companion = filter.companion ?? null;
+		const layer = filter.layer ?? null;
+		const since = filter.since ?? null;
+		const includeConsolidated = filter.include_consolidated ?? false;
+
+		try {
+			const rows = await this.sql`
+				SELECT id, tenant_id, session_id, companion, layer, content,
+				       topic_tags, entity_refs, provenance, since_seq, through_seq,
+				       message_count, token_estimate, consolidated_into, created_at
+				FROM recaps
+				WHERE tenant_id = ${this.tenant}
+				  AND (${sessionId}::text IS NULL OR session_id = ${sessionId})
+				  AND (${companion}::text IS NULL OR companion = ${companion})
+				  AND (${layer}::text IS NULL OR layer = ${layer})
+				  AND (${since}::timestamptz IS NULL OR created_at >= ${since}::timestamptz)
+				  AND (${includeConsolidated} OR consolidated_into IS NULL)
+				ORDER BY created_at DESC
+				LIMIT ${limit}
+			`;
+			return rows.map(r => this._rowToRecap(r as Record<string, unknown>));
+		} catch (err) {
+			console.error("searchRecaps failed:", err instanceof Error ? err.message : "unknown error");
+			return [];
+		}
+	}
+
+	async searchRecapsBySemantic(
+		queryEmbedding: number[],
+		limit = 10,
+		companion?: string,
+		layer?: string
+	): Promise<Array<Recap & { similarity: number }>> {
+		if (!Array.isArray(queryEmbedding) || queryEmbedding.length !== 768) {
+			throw new Error("Invalid embedding vector: must be 768 numbers");
+		}
+		const embeddingLiteral = `[${queryEmbedding.join(",")}]`;
+		const cap = Math.min(limit, 50);
+		const companionFilter = companion ?? null;
+		const layerFilter = layer ?? null;
+
+		try {
+			const rows = await this.sql`
+				SELECT id, tenant_id, session_id, companion, layer, content,
+				       topic_tags, entity_refs, provenance, since_seq, through_seq,
+				       message_count, token_estimate, consolidated_into, created_at,
+				       1 - (embedding <=> ${embeddingLiteral}::vector) AS similarity
+				FROM recaps
+				WHERE tenant_id = ${this.tenant}
+				  AND embedding IS NOT NULL
+				  AND consolidated_into IS NULL
+				  AND (${companionFilter}::text IS NULL OR companion = ${companionFilter})
+				  AND (${layerFilter}::text IS NULL OR layer = ${layerFilter})
+				ORDER BY embedding <=> ${embeddingLiteral}::vector
+				LIMIT ${cap}
+			`;
+			return rows.map(r => ({
+				...this._rowToRecap(r as Record<string, unknown>),
+				similarity: (r as Record<string, unknown>).similarity as number
+			}));
+		} catch (err) {
+			console.error("searchRecapsBySemantic failed:", err instanceof Error ? err.message : "unknown error");
+			return [];
+		}
+	}
+
+	async linkRecapToEntity(recapId: string, entityId: string, mentionType = "mentioned"): Promise<void> {
+		try {
+			await this.sql`
+				INSERT INTO recap_entity_links (recap_id, entity_id, tenant_id, mention_type)
+				VALUES (${recapId}, ${entityId}, ${this.tenant}, ${mentionType})
+				ON CONFLICT (recap_id, entity_id) DO NOTHING
+			`;
+		} catch (err) {
+			console.error("linkRecapToEntity failed:", err instanceof Error ? err.message : "unknown error");
+		}
+	}
+
+	async getRecapEntityLinks(recapId: string): Promise<RecapEntityLink[]> {
+		try {
+			const rows = await this.sql`
+				SELECT recap_id, entity_id, tenant_id, mention_type
+				FROM recap_entity_links
+				WHERE recap_id = ${recapId}
+				  AND tenant_id = ${this.tenant}
+			`;
+			return rows.map(r => ({
+				recap_id: r.recap_id as string,
+				entity_id: r.entity_id as string,
+				tenant_id: r.tenant_id as string,
+				mention_type: r.mention_type as string
+			}));
+		} catch (err) {
+			console.error("getRecapEntityLinks failed:", err instanceof Error ? err.message : "unknown error");
+			return [];
+		}
+	}
+
+	async getEntityRecaps(entityId: string, limit = 20): Promise<Recap[]> {
+		const cap = Math.min(limit, 100);
+		try {
+			const rows = await this.sql`
+				SELECT r.id, r.tenant_id, r.session_id, r.companion, r.layer, r.content,
+				       r.topic_tags, r.entity_refs, r.provenance, r.since_seq, r.through_seq,
+				       r.message_count, r.token_estimate, r.consolidated_into, r.created_at
+				FROM recaps r
+				INNER JOIN recap_entity_links rel
+				  ON rel.recap_id = r.id
+				WHERE rel.entity_id = ${entityId}
+				  AND r.tenant_id = ${this.tenant}
+				ORDER BY r.created_at DESC
+				LIMIT ${cap}
+			`;
+			return rows.map(r => this._rowToRecap(r as Record<string, unknown>));
+		} catch (err) {
+			console.error("getEntityRecaps failed:", err instanceof Error ? err.message : "unknown error");
+			return [];
+		}
+	}
+
+	async createRecapEdge(edge: Omit<RecapEdge, 'created_at'>): Promise<RecapEdge> {
+		try {
+			const rows = await this.sql`
+				INSERT INTO recap_edges (source_id, target_id, tenant_id, edge_type, weight, metadata, created_at)
+				VALUES (
+					${edge.source_id},
+					${edge.target_id},
+					${this.tenant},
+					${edge.edge_type},
+					${edge.weight ?? 1.0},
+					${edge.metadata ? JSON.stringify(edge.metadata) : null}::jsonb,
+					NOW()
+				)
+				ON CONFLICT (source_id, target_id, edge_type) DO NOTHING
+				RETURNING *
+			`;
+			// If ON CONFLICT DO NOTHING fired (edge already existed), return the existing row
+			if (rows.length === 0) {
+				const existing = await this.sql`
+					SELECT * FROM recap_edges
+					WHERE source_id = ${edge.source_id}
+					  AND target_id = ${edge.target_id}
+					  AND edge_type = ${edge.edge_type}
+					LIMIT 1
+				`;
+				return this._rowToRecapEdge(existing[0] as Record<string, unknown>);
+			}
+			return this._rowToRecapEdge(rows[0] as Record<string, unknown>);
+		} catch (err) {
+			console.error("createRecapEdge failed:", err instanceof Error ? err.message : "unknown error");
+			throw new Error("Failed to create recap edge");
+		}
+	}
+
+	async getRecapEdges(recapId: string, direction: 'outgoing' | 'incoming' | 'both' = 'both'): Promise<RecapEdge[]> {
+		try {
+			let rows;
+			if (direction === 'outgoing') {
+				rows = await this.sql`
+					SELECT * FROM recap_edges
+					WHERE source_id = ${recapId}
+					  AND tenant_id = ${this.tenant}
+					ORDER BY created_at DESC
+				`;
+			} else if (direction === 'incoming') {
+				rows = await this.sql`
+					SELECT * FROM recap_edges
+					WHERE target_id = ${recapId}
+					  AND tenant_id = ${this.tenant}
+					ORDER BY created_at DESC
+				`;
+			} else {
+				rows = await this.sql`
+					SELECT * FROM recap_edges
+					WHERE (source_id = ${recapId} OR target_id = ${recapId})
+					  AND tenant_id = ${this.tenant}
+					ORDER BY created_at DESC
+				`;
+			}
+			return rows.map(r => this._rowToRecapEdge(r as Record<string, unknown>));
+		} catch (err) {
+			console.error("getRecapEdges failed:", err instanceof Error ? err.message : "unknown error");
+			return [];
+		}
+	}
+
+	private _rowToRecapEdge(row: Record<string, unknown>): RecapEdge {
+		return {
+			source_id: row.source_id as string,
+			target_id: row.target_id as string,
+			tenant_id: row.tenant_id as string,
+			edge_type: row.edge_type as string,
+			weight: (row.weight as number) ?? 1.0,
+			metadata: row.metadata ? parseJsonRecord(row.metadata) : undefined,
+			created_at: toISOString(row.created_at) || new Date().toISOString()
 		};
 	}
 }

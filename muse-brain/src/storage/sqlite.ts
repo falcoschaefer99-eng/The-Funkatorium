@@ -45,7 +45,11 @@ import type {
 	CapturedSkillArtifact,
 	CapturedSkillArtifactCreate,
 	CapturedSkillArtifactFilter,
-	CapturedSkillRegistryHealth
+	CapturedSkillRegistryHealth,
+	Recap,
+	RecapEntityLink,
+	RecapEdge,
+	RecapFilter
 } from "../types";
 
 import {
@@ -2079,6 +2083,60 @@ export class SQLiteBrainStorage implements IBrainStorage {
 			last_run_at: lastRun?.created_at,
 			last_impulse_run_at: lastImpulse?.created_at
 		};
+	}
+
+	// ============ RECAP STUBS (Continuity Spine Phase A) ============
+	// SQLite is a local dev backend; pgvector is not available.
+	// These methods stub out the interface so TypeScript is satisfied.
+	// Postgres is the production target for all recap functionality.
+
+	async createRecap(_recap: Omit<Recap, 'id' | 'created_at'>): Promise<Recap> {
+		throw new Error("Recap methods not yet implemented for SQLite backend");
+	}
+
+	async getRecap(_recapId: string): Promise<Recap | null> {
+		throw new Error("Recap methods not yet implemented for SQLite backend");
+	}
+
+	async getRecapsBySession(_sessionId: string, _limit?: number): Promise<Recap[]> {
+		throw new Error("Recap methods not yet implemented for SQLite backend");
+	}
+
+	async getLatestRecapForSession(_sessionId: string): Promise<Recap | null> {
+		throw new Error("Recap methods not yet implemented for SQLite backend");
+	}
+
+	async searchRecaps(_filter: RecapFilter): Promise<Recap[]> {
+		throw new Error("Recap methods not yet implemented for SQLite backend");
+	}
+
+	async searchRecapsBySemantic(
+		_queryEmbedding: number[],
+		_limit?: number,
+		_companion?: string,
+		_layer?: string
+	): Promise<Array<Recap & { similarity: number }>> {
+		return [];
+	}
+
+	async linkRecapToEntity(_recapId: string, _entityId: string, _mentionType?: string): Promise<void> {
+		throw new Error("Recap methods not yet implemented for SQLite backend");
+	}
+
+	async getRecapEntityLinks(_recapId: string): Promise<RecapEntityLink[]> {
+		throw new Error("Recap methods not yet implemented for SQLite backend");
+	}
+
+	async getEntityRecaps(_entityId: string, _limit?: number): Promise<Recap[]> {
+		throw new Error("Recap methods not yet implemented for SQLite backend");
+	}
+
+	async createRecapEdge(_edge: Omit<RecapEdge, 'created_at'>): Promise<RecapEdge> {
+		throw new Error("Recap methods not yet implemented for SQLite backend");
+	}
+
+	async getRecapEdges(_recapId: string, _direction?: 'outgoing' | 'incoming' | 'both'): Promise<RecapEdge[]> {
+		throw new Error("Recap methods not yet implemented for SQLite backend");
 	}
 }
 
